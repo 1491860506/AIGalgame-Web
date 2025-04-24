@@ -2,9 +2,9 @@ name: Node.js CI
 
 on:
   push:
-    branches: ["master"]
+    branches: [ "master" ]
   pull_request:
-    branches: ["master"]
+    branches: [ "master" ]
 
 jobs:
   build:
@@ -14,18 +14,19 @@ jobs:
     strategy:
       matrix:
         node-version: [22.x]
+        # See supported Node.js release schedule at https://nodejs.org/en/about/releases/
 
     steps:
-      - uses: actions/checkout@v4
-      - name: Use Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ matrix.node-version }}
-          cache: 'npm'
-      - run: npm ci
-      - run: npm run build --if-present
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v3
-        with:
-          name: build-artifacts   # 上传的工件名称
-          path: ./dist            # 指定要保存的文件夹路径
+    - uses: actions/checkout@v4
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+    - run: npm ci
+    - run: npm run build --if-present
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-output  # Artifact 的名称，你可以自定义
+        path: ./dist        # 打包输出的目录。你需要根据你的项目进行调整。
