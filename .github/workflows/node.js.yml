@@ -1,4 +1,4 @@
-name: Node.js CI with Git LFS
+name: Node.js CI
 
 on:
   push:
@@ -14,16 +14,10 @@ jobs:
     strategy:
       matrix:
         node-version: [22.x]
+        # See supported Node.js release schedule at https://nodejs.org/en/about/releases/
 
     steps:
     - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0  # 确保检出完整的历史记录
-    - name: Set up Git LFS
-      run: |
-        git lfs install
-        git lfs fetch --all
-        git lfs checkout
     - name: Use Node.js ${{ matrix.node-version }}
       uses: actions/setup-node@v4
       with:
@@ -34,5 +28,5 @@ jobs:
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: build-output
-        path: ./dist
+        name: build-output  # Artifact 的名称，你可以自定义
+        path: ./dist        # 打包输出的目录。你需要根据你的项目进行调整。
