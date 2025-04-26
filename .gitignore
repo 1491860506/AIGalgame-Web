@@ -10,6 +10,7 @@ test.zip
 node_modules
 .DS_Store
 #dist
+/dist/rembg-model
 dist-ssr
 coverage
 *.local
