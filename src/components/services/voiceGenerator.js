@@ -1,6 +1,7 @@
 // voiceGenerator.js
 
 import { readFile, writeFile, listDirectory, getMetadata, createFolder } from './IndexedDBFileSystem.js';
+import proxyfetch from './proxyfetch.js' // Ensure this is imported
 
 // --- 辅助函数 (与 musicGenerator.js 中的可能重复，这里为了独立性重新实现) ---
 
@@ -13,11 +14,13 @@ function loadConfig() {
       const configStr = localStorage.getItem('aiGalgameConfig');
       if (!configStr) {
         console.error("配置文件未找到");
+        // Note: Original code returns null, keep this behavior
         return null;
       }
       return JSON.parse(configStr);
     } catch (error) {
       console.error("加载配置失败:", error);
+       // Note: Original code returns null, keep this behavior
       return null;
     }
   }
@@ -52,16 +55,35 @@ function saveConfig(config) {
 async function generateSingleAudio(nameId, text, status, outputName, config, audioDirectoryPath, updateStatus) {
     updateStatus(`  - 生成音频 ${outputName}.wav ...`);
     const modelConfig = config['SOVITS'];
+
+    // --- Modifications Start Here ---
+
+    // Determine the SOVITS base URL from config or use default
+    const configuredSovitsUrl = modelConfig?.['sovitsURL'];
+    const soVitsBaseUrl = (configuredSovitsUrl && configuredSovitsUrl.trim() !== '')
+        ? configuredSovitsUrl.trim() // Use configured URL if it exists and is not empty
+        : 'http://127.0.0.1:9880'; // Otherwise, use the previous hardcoded default
+
+    // Determine which fetch method to use based on config
+    const useLocalProxy = modelConfig?.['useLocalProxy']; // This is read from config and can be any type
+    // Check if useLocalProxy exists and is strictly boolean true
+    const fetchMethod = (useLocalProxy === true) ? proxyfetch : fetch;
+    console.log(`Using SOVITS base URL: ${soVitsBaseUrl}`);
+    console.log(`Using fetch method: ${fetchMethod === proxyfetch ? 'proxyfetch' : 'fetch'}`);
+
+    // --- Modifications End Here ---
+
+
     const modelName = modelConfig?.[`model${nameId}`];
     const promptPath = modelConfig?.[`path${nameId}`];
     const promptText = modelConfig?.[`text${nameId}`];
 
     if (!modelName || !promptPath || !promptText) {
         console.error(`SOVITS config missing for nameId ${nameId}`);
+        updateStatus(`  - SOVITS 配置缺失 nameId ${nameId}`);
         return "error";
     }
 
-    const soVitsBaseUrl = 'http://127.0.0.1:9880'; // Hardcoded SOVITS URL as in Python
 
     try {
         if (status === 0) {
@@ -72,15 +94,16 @@ async function generateSingleAudio(nameId, text, status, outputName, config, aud
             const setGptUrl = `${soVitsBaseUrl}/set_gpt_weights?weights_path=GPT_weights_v2/${modelName}.ckpt`;
             const setSovitsUrl = `${soVitsBaseUrl}/set_sovits_weights?weights_path=SoVITS_weights_v2/${modelName}.pth`;
             // Make sure to await these calls
-            const gptResponse = await fetch(setGptUrl);
+            // --- Use fetchMethod instead of fetch ---
+            const gptResponse = await fetchMethod(setGptUrl);
             if (!gptResponse.ok) {
                 console.error("Failed to set GPT weights:", gptResponse.statusText);
                  // Continue anyway? Or return error? Python doesn't check success here. Let's continue but log error.
             } else {
                  console.log("  - GPT weights set successfully.");
             }
-
-            const sovitsResponse = await fetch(setSovitsUrl);
+            // --- Use fetchMethod instead of fetch ---
+            const sovitsResponse = await fetchMethod(setSovitsUrl);
              if (!sovitsResponse.ok) {
                 console.error("Failed to set SoVITS weights:", sovitsResponse.statusText);
                  // Continue anyway? Or return error? Python doesn't check success here. Let's continue but log error.
@@ -108,7 +131,8 @@ async function generateSingleAudio(nameId, text, status, outputName, config, aud
         const ttsUrl = `${soVitsBaseUrl}/tts?text=${encodedText}&text_lang=${lang}&ref_audio_path=${encodedPromptPath}&prompt_lang=zh&prompt_text=${encodedPromptText}&text_split_method=cut5&batch_size=1&media_type=wav&streaming_mode=false`;
 
         console.log(`  - Calling SOVITS TTS: ${ttsUrl}`);
-        const response = await fetch(ttsUrl);
+        // --- Use fetchMethod instead of fetch ---
+        const response = await fetchMethod(ttsUrl);
 
         if (!response.ok) {
             const errorText = await response.text();
@@ -143,7 +167,16 @@ async function generateSingleAudio(nameId, text, status, outputName, config, aud
 async function generateVoice(storyId, updateStatus= console.log) {
     updateStatus(`开始生成故事 ${storyId} 的语音...`);
     const config = loadConfig();
-    const storyTitle = config.剧情.story_title;
+
+    // Ensure config is loaded before accessing properties
+    if (!config) {
+        const errorMsg = "生成语音失败：无法加载配置。";
+        updateStatus(errorMsg);
+        console.error(errorMsg);
+        return errorMsg;
+    }
+
+    const storyTitle = config.剧情?.story_title; // Use optional chaining in case 剧情 is missing
 
     if (!storyTitle) {
          const errorMsg = "生成语音失败：配置中 '剧情.story_title' 未设置。";
@@ -151,6 +184,22 @@ async function generateVoice(storyId, updateStatus= console.log) {
          console.error(errorMsg);
          return errorMsg;
     }
+
+    // Ensure SOVITS config exists and has required models before proceeding
+    const sovitsConfig = config['SOVITS'];
+    if (!sovitsConfig) {
+        const errorMsg = "生成语音失败：配置中 'SOVITS' 部分未找到。";
+        updateStatus(errorMsg);
+        console.error(errorMsg);
+        return errorMsg;
+    }
+     // Basic check for at least one model config
+     if (!sovitsConfig.model1 || !sovitsConfig.path1 || !sovitsConfig.text1) {
+        // This check might be too strict depending on how many characters are expected.
+        // generateSingleAudio already checks for the specific nameId being processed.
+        // Removing this general check here to rely on the specific check in generateSingleAudio.
+     }
+
 
     const baseDataDir = `/data/${storyTitle}`;
     const audioDirectoryPath = `${baseDataDir}/audio/${storyId}`;
@@ -163,8 +212,8 @@ async function generateVoice(storyId, updateStatus= console.log) {
         await createFolder(audioDirectoryPath);
          console.log(`Ensured audio directory exists: ${audioDirectoryPath}`);
     } catch (e) {
+        // Log a warning but continue, as writeFile might create parents
         console.warn(`Failed to create audio directory ${audioDirectoryPath}. writeFile might create parents anyway:`, e);
-        // Continue, as writeFile should handle parent directory creation
     }
 
 
@@ -211,35 +260,7 @@ async function generateVoice(storyId, updateStatus= console.log) {
 
     // Determine the starting ID
     let startId = 1;
-    updateStatus(`检查已生成的音频文件以确定起始ID...`);
-    try {
-        const files = await listDirectory(audioDirectoryPath);
-        console.log(`Existing files in ${audioDirectoryPath}:`, files);
-        const audioFiles = files.filter(f => f.name.endsWith(".wav") && !f.isFolder);
 
-        if (audioFiles.length > 0) {
-            const ids = audioFiles
-                .map(f => parseInt(f.name.replace(".wav", ""), 10))
-                .filter(id => !isNaN(id)); // Only keep valid numbers
-
-            if (ids.length > 0) {
-                const maxId = Math.max(...ids);
-                startId = maxId + 1; // Start from the next ID after the largest existing one
-                console.log(`Largest existing audio ID is ${maxId}, resuming from ${startId}`);
-                 updateStatus(`找到最大音频ID ${maxId}, 从 ID ${startId} 继续`);
-            } else {
-                 console.log("No valid numeric audio filenames found. Starting from ID 1.");
-                 updateStatus("未找到有效数字命名的音频文件。从 ID 1 开始");
-            }
-        } else {
-            console.log("No existing audio files found. Starting from ID 1.");
-             updateStatus("未找到现有音频文件。从 ID 1 开始");
-        }
-    } catch (e) {
-         console.warn(`Error listing audio directory ${audioDirectoryPath}. Assuming startId 1:`, e);
-         updateStatus(`列出目录失败，从 ID 1 开始: ${e.message}`);
-        startId = 1; // Default to 1 if listing fails
-    }
 
 
     let previousModelName = null;
@@ -268,8 +289,8 @@ async function generateVoice(storyId, updateStatus= console.log) {
          if (metadata.exists) {
              console.log(`Audio file already exists for conversation ID: ${conversationId}. Skipping.`);
              updateStatus(`跳过 ID ${conversationId}: 音频文件已存在`);
-             processedCount++; // Count even skipped ones if they were >= startId
-             // Need to update previousModelName even for skipped ones if it's relevant for the *next* conversation
+             processedCount++; // Count towards total processed if it was >= startId
+             // Need to update previousModelName for correct status calculation in the next iteration
              const char = characterData.find(char => char.name === characterName);
              if (char) {
                  const placeId = characterData.indexOf(char) + 1;
@@ -284,9 +305,7 @@ async function generateVoice(storyId, updateStatus= console.log) {
         if (!characterName) {
             console.log(`Skipping conversation ID ${conversationId}: character name is empty.`);
              updateStatus(`跳过 ID ${conversationId}: 角色名为空`);
-             // Need to update previousModelName even for skipped ones if it's relevant for the *next* conversation
-              // For empty character, the previous model doesn't change relevant state for the _next_ *valid* character
-              // So we don't update previousModelName here.
+             // Don't update previousModelName as this conversation doesn't set a model.
             continue;
         }
 
@@ -306,7 +325,7 @@ async function generateVoice(storyId, updateStatus= console.log) {
         if (!final_text.trim()) {
              console.log(`Skipping conversation ID ${conversationId}: text is empty after processing.`);
              updateStatus(`跳过 ID ${conversationId}: 文本处理后为空`);
-              // Don't update previousModelName
+             // Don't update previousModelName
             continue;
         }
 
@@ -317,20 +336,31 @@ async function generateVoice(storyId, updateStatus= console.log) {
             placeId = characterData.indexOf(character) + 1; // JSON indices start from 1
         } else {
              console.warn(`Character "${characterName}" not found in character data for conversation ID ${conversationId}. Using default placeId ${placeId}.`);
+             // Don't update previousModelName if character isn't found, as we don't know which model was *actually* used.
         }
 
+        // Retrieve model name based on determined placeId
         const modelName = config['SOVITS']?.[`model${placeId}`];
+
+        // If modelName isn't found for the placeId (even if character was found), skip
+        if (!modelName) {
+             console.warn(`SOVITS config missing model for placeId ${placeId} (character "${characterName}") for conversation ID ${conversationId}. Skipping.`);
+             updateStatus(`跳过 ID ${conversationId}: 角色模型未配置`);
+             // Don't update previousModelName
+            continue;
+        }
+
 
         let status = 0; // Default to set weights
         if (previousModelName !== null && modelName === previousModelName) {
             status = 1; // Reuse weights if model is the same as previous
         }
 
-        console.log(`Processing conversation ID ${conversationId} for character ${characterName} (placeId ${placeId})`);
+        console.log(`Processing conversation ID ${conversationId} for character ${characterName} (placeId ${placeId}) using model ${modelName}`);
         updateStatus(`处理 ID ${conversationId} (${processedCount + 1}/${conversationsToProcess.length}) 角色: ${characterName}`);
 
         const result = await generateSingleAudio(
-            placeId,
+            placeId, // Pass placeId, which is used as nameId in generateSingleAudio
             final_text,
             status,
             String(conversationId), // Ensure output name is string ID
@@ -341,19 +371,20 @@ async function generateVoice(storyId, updateStatus= console.log) {
 
         if (result === "ok") {
             processedCount++;
-            previousModelName = modelName; // Update previous model only on success
+            previousModelName = modelName; // Update previous model only on successful generation for this model
         } else {
-             // If generation fails, stop processing? Or just log and continue?
-             // Python code doesn't explicitly stop on generate_single_audio error. Let's log and continue.
+             // If generation fails, log and continue.
              console.error(`Failed to generate audio for conversation ID ${conversationId}. Continuing to next.`);
-             // Don't update previousModelName on failure, so the next *successful* generation will likely reset weights (status 0)
+             // Don't update previousModelName on failure, so the next *successful* generation will likely reset weights (status 0) if the character/model changes.
         }
     }
 
     const finalMessage = `完成故事 ${storyId} 的语音生成。处理了 ${processedCount} 个对话。`;
     updateStatus(finalMessage);
     console.log(finalMessage);
-    return "ok"; // Return ok even if some failed, unless we want a strict "all or nothing"
+    // Return ok even if some failed, unless we want a strict "all or nothing" failure.
+    // The original code implies continuing after a single error, so returning "ok" at the end seems consistent.
+    return "ok";
 
 }
 

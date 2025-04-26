@@ -100,7 +100,7 @@
                   <input type="checkbox" v-model="useCors">
                   <span class="slider round"></span>
                 </label>
-                <span class="switch-label">启用CORS跨域</span>
+                <span class="switch-label">启用本地代理跨域</span>
               </div>
               
               <!-- Second request switch -->

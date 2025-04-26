@@ -10,14 +10,13 @@
       weightedRandomChoice,
       safeGetPath,
       evaluateConditionSafe,
-      safeB64Decode,
       processUserdefine,
       USERDEFINE_FUNCTION_MAP,
       parseHeaders,
       parseJsonFromGptResponse,
       AsyncLock
   } from './imagegenerate_utils.js'; // Import helpers
-  
+  import proxyfetch from './proxyfetch.js' // Ensure this is imported
   const _EVAL_FAILED = Symbol("EvalFailed"); // Re-declare or import from utils if needed
   
   // --- Global State ---
@@ -691,12 +690,6 @@
   async function writeFileJS(path, content) {
       try {
           let dataToWrite = content;
-          // IndexedDB can store Blobs, ArrayBuffers, strings, objects directly.
-          // If it's an object that isn't Blob/ArrayBuffer, maybe stringify?
-          // Let's keep it simple and assume the content is already in a suitable format
-          // (e.g., Uint8Array from b64decode, Blob from fetch, string from user).
-          // The IndexedDBFileSystem likely handles basic types. If storing complex objects,
-          // stringify might be needed depending on its implementation. Let's assume it handles it.
   
           // Check if content is Uint8Array and convert to Blob for wider compatibility
           if (content instanceof Uint8Array) {
@@ -719,9 +712,9 @@
    * @param {string} url URL to download from
    * @returns {Promise<boolean>} Success status
    */
-  async function getFileJS(path, url) {
+  async function getFileJS(path, url,fetchMethod=fetch) {
       try {
-          const response = await fetch(url, { method: 'GET' }); // Add timeout? CORS?
+          const response = await fetchMethod(url, { method: 'GET' }); // Add timeout? CORS?
           if (!response.ok) {
               throw new Error(`HTTP error! status: ${response.status}`);
           }
@@ -757,6 +750,10 @@ export async function generateJS(config, imagesDir, prompt, imageName, model) {
         second_request, url2_tpl, method2, headers2, body2_tpl, path2, success2, fail2, forbid2, userdefine2,
         request_timeout, second_request_timeout
     ] = params;
+
+    const modelConfig = config?.AI_draw?.configs?.[model];
+    const useLocalProxy = modelConfig?.['use_cors']; 
+    const fetchMethod = (useLocalProxy === true) ? proxyfetch : fetch;
 
     const filePath = `${imagesDir}/${imageName}.png`;
 
@@ -809,7 +806,7 @@ export async function generateJS(config, imagesDir, prompt, imageName, model) {
 
     try {
         console.debug(`DEBUG: Request 1 for ${imageName} (${model}) - ${method1} ${url1}`);
-        response = await fetch(url1, {
+        response = await fetchMethod(url1, {
             method: method1,
             headers: finalHeaders1,
             body: (method1 === 'POST' || method1 === 'PUT' || method1 === 'PATCH') ? body1_processed : undefined,
@@ -947,7 +944,7 @@ export async function generateJS(config, imagesDir, prompt, imageName, model) {
             }
             // Check if intermediate result is a downloadable URL or binary data
             if (typeof intermediate_result === 'string' && (intermediate_result.startsWith('http://') || intermediate_result.startsWith('https://'))) {
-                if (await getFileJS(filePath, intermediate_result)) return "success";
+                if (await getFileJS(filePath, intermediate_result,fetchMethod)) return "success";
                 else { console.error("Download fail (Req1)"); return "error"; }
             }
             else if (intermediate_result instanceof Blob || intermediate_result instanceof ArrayBuffer || intermediate_result instanceof Uint8Array) {
@@ -1012,7 +1009,7 @@ export async function generateJS(config, imagesDir, prompt, imageName, model) {
 
             try {
                 // console.debug(`DEBUG: Request 2 for ${imageName}, attempt ${attempt + 1} - ${method2} ${url2}`);
-                response2 = await fetch(url2, { /* ... fetch options ... */
+                response2 = await fetchMethod(url2, { /* ... fetch options ... */
                     method: method2,
                     headers: finalHeaders2,
                     body: (method2 === 'POST' || method2 === 'PUT' || method2 === 'PATCH') ? body2_processed : undefined,
@@ -1122,7 +1119,7 @@ export async function generateJS(config, imagesDir, prompt, imageName, model) {
                          }
                          // Save/download final_extracted_result
                          if (typeof final_extracted_result === 'string' && (final_extracted_result.startsWith('http://') || final_extracted_result.startsWith('https://'))) {
-                             if (await getFileJS(filePath, final_extracted_result)) return "success";
+                             if (await getFileJS(filePath, final_extracted_result,fetchMethod)) return "success";
                              else { console.error("Download fail (Req2)"); return "error"; }
                          }
                          else if (final_extracted_result instanceof Blob || final_extracted_result instanceof ArrayBuffer || final_extracted_result instanceof Uint8Array) {

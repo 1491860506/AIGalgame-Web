@@ -574,11 +574,6 @@ let titleFetchInProgress = null;
  * @throws {Error} If the title file cannot be read.
  */
 async function getDynamicTitle() {
-    if (cachedTitle) {
-        // console.log("[SW getDynamicTitle] Using cached title:", cachedTitle);
-        return cachedTitle;
-    }
-    // Prevent concurrent fetches if multiple requests come in before the first resolves
     if (titleFetchInProgress) {
         // console.log("[SW getDynamicTitle] Waiting for existing title fetch...");
         return titleFetchInProgress;
@@ -1311,7 +1306,8 @@ if (method === 'GET' && requestedPath.startsWith('/webgal/game/vocal/')) {
            if (typeof titleContent !== 'string') {
                throw new Error("Title content from /data/test/title.txt is not a string.");
            }
-          const configContent = `Game_name:${titleContent.trim()};\nGame_key:42eed597103c0e;\nTitle_img:title.png;\nTitle_bgm:background.mp3;\nTextbox_theme:imss;`;
+          let game_key = (x => {let h = 0; for (let i = 0; i < titleContent.trim().length; i++) {let c = titleContent.trim().charCodeAt(i); h = (h << 5) - h + c; h = h & h;} return Math.abs(h).toString(16).padStart(8, '0').slice(0, 8);})(titleContent.trim());
+          const configContent = `Game_name:${titleContent.trim()};\nGame_key:${game_key};\nTitle_img:title.png;\nTitle_bgm:background.mp3;\nTextbox_theme:imss;`;
           return createTextResponse(configContent, 200, false); // Config should likely not be cached
 
         } catch (error) {

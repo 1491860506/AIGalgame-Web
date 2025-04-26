@@ -4,13 +4,28 @@
     <div class="header-section">
       <h1 class="title">语音合成配置</h1>
       <p class="subtitle">配置语音文件、文本内容和模型参数</p>
-      
+
+      <!-- Proxy Switch -->
+      <div class="proxy-config">
+        <label for="proxy-switch" class="proxy-label">使用本地代理:</label>
+        <label class="toggle-switch">
+          <input type="checkbox" id="proxy-switch" v-model="useLocalProxy">
+          <span class="toggle-label-switch"></span>
+        </label>
+      </div>
+
+      <!-- SoVITS URL Input -->
+      <div class="sovits-url-config">
+        <label for="sovits-url">SoVITS URL:</label>
+        <input type="text" id="sovits-url" v-model="sovitsURL" placeholder="http://127.0.0.1:9880">
+      </div>
+
       <!-- Emotion Selector -->
       <div class="emotion-switcher">
         <div class="emotion-title">语气选择:</div>
         <div class="emotion-options">
-          <button 
-            v-for="emotion in emotions" 
+          <button
+            v-for="emotion in emotions"
             :key="emotion.value"
             @click="switchEmotion(emotion.value)"
             class="emotion-btn"
@@ -21,7 +36,7 @@
           </button>
         </div>
       </div>
-      
+
       <div class="separator"></div>
     </div>
 
@@ -32,7 +47,7 @@
         <span class="emotion-indicator-icon">{{ getCurrentEmotionIcon() }}</span>
         <span class="emotion-indicator-text">当前配置语气: {{ getCurrentEmotionLabel() }}</span>
       </div>
-      
+
       <!-- Header Row -->
       <div class="table-header">
         <div class="col-index">序号</div>
@@ -43,31 +58,31 @@
 
       <!-- Entries without scroll -->
       <div class="entries-container-no-scroll">
-        <div 
-          v-for="(_, index) in 7" 
-          :key="index" 
+        <div
+          v-for="(_, index) in 7"
+          :key="index"
           class="entry-row"
           :class="{ 'even-row': index % 2 === 1 }"
         >
           <div class="col-index">{{ index + 1 }}</div>
           <div class="col-file">
-            <textarea 
-              v-model="filePaths[index]" 
-              placeholder="输入音频文件路径" 
+            <textarea
+              v-model="filePaths[index]"
+              placeholder="输入音频文件路径"
               rows="2"
             ></textarea>
           </div>
           <div class="col-text">
-            <textarea 
-              v-model="textContents[index]" 
-              placeholder="输入文本内容" 
+            <textarea
+              v-model="textContents[index]"
+              placeholder="输入文本内容"
               rows="2"
             ></textarea>
           </div>
           <div class="col-model">
-            <textarea 
-              v-model="modelNames[index]" 
-              placeholder="输入模型名称" 
+            <textarea
+              v-model="modelNames[index]"
+              placeholder="输入模型名称"
               rows="2"
             ></textarea>
           </div>
@@ -78,17 +93,17 @@
     <!-- Control Panel -->
     <div class="control-panel">
       <h3 class="panel-title">批量操作</h3>
-      
+
       <div class="control-row">
         <button class="btn btn-primary" @click="fillTextContent">
           <span class="btn-icon">✍️</span> 一键填入文本内容
         </button>
-        
+
         <div class="model-fill-section">
           <label>批量设置模型名称:</label>
-          <input 
-            type="text" 
-            v-model="batchModelName" 
+          <input
+            type="text"
+            v-model="batchModelName"
             placeholder="输入要应用的模型名称"
           />
           <button class="btn btn-primary" @click="fillModelNames">
@@ -96,10 +111,10 @@
           </button>
         </div>
       </div>
-      
+
       <div class="control-row">
         <span class="help-text">
-          <span class="tip-highlight">提示:</span> 
+          <span class="tip-highlight">提示:</span>
           当前编辑的是<strong>{{ getCurrentEmotionLabel() }}</strong>语气的配置
         </span>
         <button class="btn btn-success" @click="saveConfig">
@@ -109,8 +124,8 @@
     </div>
 
     <!-- Message Bubble for notifications -->
-    <div 
-      class="message-bubble" 
+    <div
+      class="message-bubble"
       :class="{ active: showMessage, success: messageType === 'success', error: messageType === 'error' }"
     >
       <span>{{ messageContent }}</span>
@@ -131,56 +146,68 @@ export default {
         { value: 'angry', label: '生气', icon: '😠' }
       ],
       currentEmotion: 'normal',
-      
+
       // Configuration arrays
       filePaths: Array(7).fill(''),
       textContents: Array(7).fill(''),
       modelNames: Array(7).fill(''),
-      
+
       // Batch operations
       batchModelName: '',
-      
+
       // Message system
       showMessage: false,
       messageType: 'success',
       messageContent: '',
-      messageTimeout: null
+      messageTimeout: null,
+
+      // Proxy and URL settings
+      useLocalProxy: false,
+      sovitsURL: 'http://127.0.0.1:9880' // Default value
     };
   },
   mounted() {
     // Load saved configuration on component mount
     this.loadConfig();
   },
+  watch: {
+    useLocalProxy(newVal) {
+      this.saveConfig(); //save immediately, or saveConfig will use default config when change page.
+    },
+    sovitsURL(newVal) {
+      this.saveConfig(); //save immediately, or saveConfig will use default config when change page.
+    }
+  },
   methods: {
     // Emotion related methods
     switchEmotion(emotion) {
       // Save current configuration before switching
       this.saveConfig(true); // Silent save
-      
+
       // Update current emotion
       this.currentEmotion = emotion;
-      
+
       // Load configuration for the selected emotion
       this.loadConfig();
-      
+
     },
-    
+
     getCurrentEmotionLabel() {
       return this.emotions.find(e => e.value === this.currentEmotion).label;
     },
-    
+
     getCurrentEmotionIcon() {
       return this.emotions.find(e => e.value === this.currentEmotion).icon;
     },
-    
+
     getConfigKeySuffix() {
       // For normal emotion, don't add any suffix
       if (this.currentEmotion === 'normal') return '';
-      
+
       // For other emotions, add the appropriate suffix
       return `_${this.currentEmotion}`;
     },
-    
+
     // Text processing
     fillTextContent() {
       for (let i = 0; i < this.filePaths.length; i++) {
@@ -190,21 +217,21 @@ export default {
             const filepath = this.filePaths[i].trim();
             const filename = filepath.split(/[\/\\]/).pop(); // Works for both Unix and Windows paths
             let nameWithoutExtension = filename.split('.')[0];
-            
+
             // Clean up the name (remove content in brackets like [text] or 【text】)
             nameWithoutExtension = nameWithoutExtension.replace(/\【.*?\】/g, '');
             nameWithoutExtension = nameWithoutExtension.replace(/\[.*?\]/g, '');
-            
+
             this.textContents[i] = nameWithoutExtension.trim();
           } catch (error) {
             console.error(`Error processing file path at index ${i}:`, error);
           }
         }
       }
-      
+
       this.showMessageBubble('success', '文本内容已根据文件名填充');
     },
-    
+
     fillModelNames() {
       if (this.batchModelName.trim()) {
         this.modelNames = this.modelNames.map(() => this.batchModelName.trim());
@@ -213,59 +240,65 @@ export default {
         this.showMessageBubble('error', '请先输入要应用的模型名称');
       }
     },
-    
+
     // Configuration management
     loadConfig() {
       try {
         const savedConfig = JSON.parse(localStorage.getItem('aiGalgameConfig') || '{}');
         const sovitsConfig = savedConfig.SOVITS || {};
-        
+
         // Get the suffix for the current emotion
         const suffix = this.getConfigKeySuffix();
-        
+
         // Load file paths, text content, and model names
         for (let i = 0; i < 7; i++) {
-          const pathKey = `path${i+1}${suffix}`;
-          const textKey = `text${i+1}${suffix}`;
-          const modelKey = `model${i+1}${suffix}`;
-          
+          const pathKey = `path${i + 1}${suffix}`;
+          const textKey = `text${i + 1}${suffix}`;
+          const modelKey = `model${i + 1}${suffix}`;
+
           this.filePaths[i] = sovitsConfig[pathKey] || '';
           this.textContents[i] = sovitsConfig[textKey] || '';
           this.modelNames[i] = sovitsConfig[modelKey] || '';
         }
+        // Load proxy and URL settings
+        this.useLocalProxy = sovitsConfig.useLocalProxy !== undefined ? sovitsConfig.useLocalProxy : false;
+        this.sovitsURL = sovitsConfig.sovitsURL || 'http://127.0.0.1:9880';  // Use default if config doesn't exist
       } catch (error) {
         console.error('Error loading voice configuration:', error);
         this.showMessageBubble('error', '加载配置失败');
       }
     },
-    
+
     saveConfig(silent = false) {
       try {
         const savedConfig = JSON.parse(localStorage.getItem('aiGalgameConfig') || '{}');
-        
+
         if (!savedConfig.SOVITS) {
           savedConfig.SOVITS = {};
         }
-        
+
         // Get the suffix for the current emotion
         const suffix = this.getConfigKeySuffix();
-        
+
         // Save file paths, text content, and model names
         for (let i = 0; i < 7; i++) {
-          const pathKey = `path${i+1}${suffix}`;
-          const textKey = `text${i+1}${suffix}`;
-          const modelKey = `model${i+1}${suffix}`;
-          
+          const pathKey = `path${i + 1}${suffix}`;
+          const textKey = `text${i + 1}${suffix}`;
+          const modelKey = `model${i + 1}${suffix}`;
+
           savedConfig.SOVITS[pathKey] = this.filePaths[i].trim();
           savedConfig.SOVITS[textKey] = this.textContents[i].trim();
           savedConfig.SOVITS[modelKey] = this.modelNames[i].trim();
         }
-        
-        localStorage.setItem('aiGalgameConfig', JSON.stringify(savedConfig));
-        
 
-          this.showMessageBubble('success', `${this.getCurrentEmotionLabel()}语气配置已保存`);
-        
+        // Save proxy and URL settings
+        savedConfig.SOVITS.useLocalProxy = this.useLocalProxy;
+        savedConfig.SOVITS.sovitsURL = this.sovitsURL;
+
+        localStorage.setItem('aiGalgameConfig', JSON.stringify(savedConfig));
+
+        this.showMessageBubble('success', `${this.getCurrentEmotionLabel()}语气配置已保存`);
+
       } catch (error) {
         console.error('Error saving voice configuration:', error);
         if (!silent) {
@@ -273,9 +306,9 @@ export default {
         }
       }
     },
-    
+
     showMessageBubble(type, content) {
-      this.$emit('show-message', { title: type, message: content});
+      this.$emit('show-message', { title: type, message: content });
     }
   }
 };
@@ -305,7 +338,7 @@ export default {
   --shadow-medium: rgba(0, 0, 0, 0.15);
   --transition-speed: 0.3s;
   --border-radius: 8px;
-  
+
   /* Emotion colors */
   --emotion-normal-color: #64748b;
   --emotion-happy-color: #f59e0b;
@@ -338,7 +371,7 @@ body.dark-theme {
   --odd-row-bg: #2d2d3a;
   --shadow-light: rgba(0, 0, 0, 0.3);
   --shadow-medium: rgba(0, 0, 0, 0.4);
-  
+
   /* Emotion colors for dark theme */
   --emotion-normal-bg: #334155;
   --emotion-happy-bg: #78350f;
@@ -770,32 +803,32 @@ textarea:focus {
     flex-direction: column;
     align-items: flex-start;
   }
-  
+
   .emotion-switcher {
     flex-direction: column;
     align-items: flex-start;
   }
-  
+
   .model-fill-section {
     margin-left: 0;
     width: 100%;
     justify-content: space-between;
   }
-  
+
   .model-fill-section input {
     flex: 1;
   }
-  
+
   .btn {
     padding: 0.7rem 1.25rem;
   }
-  
+
   .control-row:last-child {
     flex-direction: column-reverse;
     align-items: stretch;
     gap: 1.5rem;
   }
-  
+
   .control-row:last-child .btn {
     width: 100%;
   }
@@ -806,34 +839,37 @@ textarea:focus {
   .entry-row {
     font-size: 0.9rem;
   }
-  
+
   .title {
     font-size: 1.75rem;
   }
-  
+
   .subtitle {
     font-size: 1rem;
   }
-  
+
   .col-index {
     width: 40px;
     font-size: 1rem;
   }
-  
-  .col-file, .col-text, .col-model {
+
+  .col-file,
+  .col-text,
+  .col-model {
     padding: 0 0.5rem;
   }
-  
-  textarea, input {
+
+  textarea,
+  input {
     padding: 0.7rem;
   }
-  
+
   .emotion-options {
     flex-direction: row;
     flex-wrap: wrap;
     width: 100%;
   }
-  
+
   .emotion-btn {
     flex: 1;
     min-width: 120px;
@@ -844,28 +880,28 @@ textarea:focus {
   .voice-config {
     padding: 1rem;
   }
-  
+
   .table-header {
     padding: 0.75rem 0.5rem;
   }
-  
+
   .entry-row {
     padding: 0.75rem 0.5rem;
   }
-  
+
   .model-fill-section {
     flex-direction: column;
     align-items: stretch;
   }
-  
+
   .model-fill-section label {
     margin-bottom: 0.5rem;
   }
-  
+
   .panel-title {
     font-size: 1.2rem;
   }
-  
+
   .emotion-btn {
     padding: 0.6rem 1rem;
   }
@@ -873,8 +909,13 @@ textarea:focus {
 
 /* Animation effects */
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 .fade-in {
@@ -896,5 +937,95 @@ textarea:focus {
 
 .emotion-btn[data-emotion="angry"] {
   border-color: var(--emotion-angry-color);
+}
+
+/* Proxy and URL Config Styles */
+.proxy-config,
+.sovits-url-config {
+  display: flex;
+  align-items: center;
+  margin-bottom: 1rem;
+  gap: 0.75rem;
+}
+
+.proxy-config label,
+.sovits-url-config label {
+  font-weight: 500;
+  color: var(--text-color);
+  transition: color var(--transition-speed);
+  white-space: nowrap; /* Prevent label text from wrapping */
+}
+
+.proxy-config input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+}
+
+.sovits-url-config input[type="text"] {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--input-border);
+  border-radius: var(--border-radius);
+  font-size: 0.95rem;
+  background-color: var(--input-bg);
+  color: var(--input-text);
+  transition: all var(--transition-speed);
+}
+
+.sovits-url-config input[type="text"]::placeholder {
+  color: var(--text-secondary);
+  opacity: 0.7;
+}
+
+.sovits-url-config input[type="text"]:focus {
+  border-color: var(--primary-color);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+}
+
+.toggle-switch {
+position: relative;
+display: inline-block;
+width: 60px;
+height: 30px;
+}
+
+.toggle-switch input {
+opacity: 0;
+width: 0;
+height: 0;
+}
+
+.toggle-label-switch {
+position: absolute;
+cursor: pointer;
+top: 0;
+left: 0;
+right: 0;
+bottom: 0;
+background-color: var(--border-color);
+transition: .4s;
+border-radius: 34px;
+}
+
+.toggle-label-switch:before {
+position: absolute;
+content: "";
+height: 22px;
+width: 22px;
+left: 4px;
+bottom: 4px;
+background-color: white;
+transition: .4s;
+border-radius: 50%;
+}
+
+input:checked + .toggle-label-switch {
+background-color: var(--active-bg);
+}
+
+input:checked + .toggle-label-switch:before {
+transform: translateX(30px);
 }
 </style>
