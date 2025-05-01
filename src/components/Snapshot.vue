@@ -1,48 +1,51 @@
 <template>
-  <div class="voice-generator-test">
-    <h1>AI 语音生成测试 (SOVITS)</h1>
+  <div class="music-generator-test">
+    <h1>AI 音乐生成测试</h1>
 
     <div class="config-section">
       <h2>配置</h2>
       <div>
         <label for="storyTitle">故事标题:</label>
         <input id="storyTitle" v-model="storyTitle" @input="saveCurrentConfig" />
-        <p class="config-hint">语音和角色文件应位于 /data/{{ storyTitle }}/story/ 和 /data/{{ storyTitle }}/character.json</p>
       </div>
       <div>
-          <label for="themeLanguage">主题语言 (影响SOVITS Lang参数):</label>
-           <select id="themeLanguage" v-model="themeLanguage" @change="saveCurrentConfig">
-               <option value="中文">中文</option>
-               <option value="英文">英文</option>
-               <option value="日文">日文</option>
-           </select>
+        <label for="musicUrl">AI 音乐 API Base URL:</label>
+        <input id="musicUrl" v-model="musicUrl" @input="saveCurrentConfig" placeholder="例如: https://api.example.com/music" />
       </div>
-       <p class="config-hint">SOVITS模型配置 (modelX, pathX, textX) 需要在浏览器的 localStorage 中手动编辑 'aiGalgameConfig' 的 "SOVITS" 部分。</p>
+       <div>
+           <label for="apiKey">AI 音乐 API Key:</label>
+           <input id="apiKey" v-model="apiKey" @input="saveCurrentConfig" placeholder="例如: sk-..." />
+       </div>
     </div>
 
     <div class="generator-section">
-      <h2>生成语音</h2>
+      <h2>背景音乐</h2>
+      <button @click="startGenerateBackgroundMusic" :disabled="isGenerating">生成背景音乐</button>
+    </div>
+
+    <div class="generator-section">
+      <h2>结尾音乐</h2>
       <div>
-        <label for="storyId">故事 Segment ID:</label>
-        <input id="storyId" v-model="storyId"/>
+        <label for="storyId">故事 ID:</label>
+        <input id="storyId" v-model="storyId" type="number" min="1" />
       </div>
-      <button @click="startGenerateVoice" :disabled="isGenerating || !storyId || !storyTitle">生成语音</button>
+      <button @click="startGenerateEndMusic" :disabled="isGenerating || !storyId">生成结尾音乐</button>
     </div>
 
     <div class="status-section">
       <h2>状态</h2>
-      <p v-html="status"></p> <!-- Use v-html to potentially render line breaks -->
+      <p>{{ status }}</p>
       <div v-if="errorMessage" class="error-message">{{ errorMessage }}</div>
     </div>
 
-    <div class="file-list-section" v-if="storyTitle && storyId">
-         <h2>生成的文件 (IndexedDB /data/{{ storyTitle }}/audio/{{ storyId }})</h2>
-         <button @click="listAudioFiles" :disabled="isGenerating || !storyTitle || !storyId">刷新文件列表</button>
+     <div class="file-list-section">
+         <h2>生成的文件 (IndexedDB /data/{{ storyTitle }}/music)</h2>
+         <button @click="listMusicFiles" :disabled="isGenerating || !storyTitle">刷新文件列表</button>
          <ul>
-             <li v-for="file in audioFiles" :key="file.path">
+             <li v-for="file in musicFiles" :key="file.path">
                  {{ file.name }} ({{ file.isFolder ? '文件夹' : '文件' }}) - {{ file.path }}
              </li>
-              <li v-if="audioFiles.length === 0 && !initialLoad">
+              <li v-if="musicFiles.length === 0 && !initialLoad">
                   暂无文件或目录不存在。
               </li>
          </ul>
@@ -52,117 +55,141 @@
 
 <script setup>
 import { ref, onMounted, watch } from 'vue';
-// 导入语音生成函数和配置函数
-import { generateVoice, loadConfig, saveConfig } from './services/voiceGenerator'; // Assuming voiceGenerator.js is in the same directory
+// 导入音乐生成函数和配置函数
+import { generateBackgroundMusic, generateEndMusic, loadConfig, saveConfig } from './services/aimusicService';
 // 导入 IndexedDB 文件系统模拟的列出目录函数
-import { listDirectory, getMetadata } from './services/IndexedDBFileSystem';
+import { listDirectory,getMetadata } from './services/IndexedDBFileSystem';
 
 // 响应式状态
 const storyTitle = ref('MyNewStory');
-const themeLanguage = ref('中文');
-const storyId = ref(0);
+const musicUrl = ref('');
+const apiKey = ref(''); // Assuming apiKey is part of the config
+const storyId = ref(1);
 const status = ref('等待操作...');
 const errorMessage = ref('');
 const isGenerating = ref(false);
-const audioFiles = ref([]);
+const musicFiles = ref([]);
 const initialLoad = ref(true); // Flag to show "暂无文件" after first list attempt
 
 // 加载配置
 const loadInitialConfig = () => {
   const config = loadConfig();
   storyTitle.value = config["剧情"]?.["story_title"] || 'MyNewStory';
-  themeLanguage.value = config["剧情"]?.["language"] || '中文';
-  // SOVITS config (modelX, pathX, textX) is loaded within generateVoice,
-  // no need to expose all of them as reactive properties in the UI unless you want to edit them there.
-  // The hint text tells the user they might need to edit localStorage directly.
+  musicUrl.value = config["AI音乐"]?.["base_url"] || '';
+  apiKey.value = config["AI音乐"]?.["api_key"] || ''; // Load api_key
 };
 
 // 保存当前配置到 localStorage
 const saveCurrentConfig = () => {
-    const currentConfig = loadConfig(); // Load existing config first to preserve SOVITS section
-    currentConfig["剧情"] = currentConfig["剧情"] || {}; // Ensure structure
-    currentConfig["剧情"]["story_title"] = storyTitle.value;
-    currentConfig["剧情"]["language"] = themeLanguage.value;
-    // Note: SOVITS config is *not* saved here, it's assumed to be managed elsewhere or manually.
-    // If you want to save SOVITS config from UI, add inputs for each model/path/text and include them here.
+    const currentConfig = {
+        "剧情": {
+            "story_title": storyTitle.value
+            // Add other story config if needed
+        },
+        "AI音乐": {
+            "base_url": musicUrl.value,
+            "api_key": apiKey.value // Save api_key
+            // Add other music config if needed
+        }
+    };
     saveConfig(currentConfig);
 };
 
 // 更新状态的函数
 const updateStatus = (msg) => {
-  // Append message with a newline, useful for seeing progression
-  status.value += (status.value === '等待操作...' ? '' : '<br>') + msg;
-
-  // Basic error detection in status message for errorMessage
-  if (msg.includes("失败") || msg.includes("错误:")) {
+  status.value = msg;
+  if (msg.startsWith("生成音乐失败") || msg.startsWith("下载或保存") || msg.startsWith("LLM调用失败")) {
       errorMessage.value = msg;
+  } else {
+      errorMessage.value = ''; // Clear error message on new status
   }
 };
 
-// 开始生成语音
-const startGenerateVoice = async () => {
-  if (!storyTitle.value || !storyId.value) {
-    alert('请输入故事标题和故事 ID');
-    return;
-  }
+// 开始生成背景音乐
+const startGenerateBackgroundMusic = async () => {
   isGenerating.value = true;
   errorMessage.value = '';
-  status.value = '开始生成语音...'; // Reset status for new operation
-
+  updateStatus('开始生成背景音乐...');
   try {
-    const result = await generateVoice(storyId.value, updateStatus);
-    if (result !== "ok") { // If result is not "ok", it's an error message
+    const result = await generateBackgroundMusic(updateStatus);
+    if (result) { // If result is not void, it's an error message
         errorMessage.value = result;
-         status.value += '<br>' + `语音生成失败: ${result}`;
+        status.value = `背景音乐生成失败: ${result}`;
     } else {
-       // Success messages are handled by updateStatus internally
+       // Success is reported by updateStatus inside the function
        // Wait a moment then refresh file list
        await new Promise(resolve => setTimeout(resolve, 500));
-       listAudioFiles();
+       listMusicFiles();
     }
   } catch (error) {
-    console.error("Error during voice generation:", error);
+    console.error("Error during background music generation:", error);
     const msg = `发生未预期错误: ${error.message}`;
-    errorMessage.value = msg;
-    status.value += '<br>' + msg;
+     errorMessage.value = msg;
+    updateStatus(msg);
   } finally {
     isGenerating.value = false;
   }
 };
 
-// 列出音频目录下的文件
-const listAudioFiles = async () => {
-    if (!storyTitle.value || !storyId.value) {
-        audioFiles.value = [];
+// 开始生成结尾音乐
+const startGenerateEndMusic = async () => {
+  if (!storyId.value) {
+    alert('请输入故事 ID');
+    return;
+  }
+  isGenerating.value = true;
+  errorMessage.value = '';
+  updateStatus(`开始生成结尾音乐 (Story ID: ${storyId.value})...`);
+   try {
+    const result = await generateEndMusic(storyId.value, updateStatus);
+     if (result) { // If result is not void, it's an error message
+        errorMessage.value = result;
+         status.value = `结尾音乐生成失败: ${result}`;
+    } else {
+       // Success is reported by updateStatus inside the function
+        // Wait a moment then refresh file list
+       await new Promise(resolve => setTimeout(resolve, 500));
+       listMusicFiles();
+    }
+  } catch (error) {
+    console.error("Error during end music generation:", error);
+     const msg = `发生未预期错误: ${error.message}`;
+     errorMessage.value = msg;
+    updateStatus(msg);
+  } finally {
+    isGenerating.value = false;
+  }
+};
+
+// 列出音乐目录下的文件
+const listMusicFiles = async () => {
+    if (!storyTitle.value) {
+        musicFiles.value = [];
         initialLoad.value = false;
         return;
     }
-    const audioDir = `/data/${storyTitle.value}/audio/${storyId.value}`;
-    console.log(`Listing files in ${audioDir}`);
-    updateStatus(`尝试列出文件: ${audioDir}`);
+    const musicDir = `/data/${storyTitle.value}/music`;
+    console.log(`Listing files in ${musicDir}`);
     try {
         // Check if directory exists first
-        const metadata = await getMetadata(audioDir).catch(() => ({exists: false})); // Handle potential errors like title not existing
-
+        const metadata = await getMetadata(musicDir);
          if (!metadata.exists || !metadata.isFolder) {
-            console.warn(`Directory ${audioDir} does not exist or is not a folder.`);
-            audioFiles.value = [];
+            console.warn(`Directory ${musicDir} does not exist or is not a folder.`);
+            musicFiles.value = [];
             initialLoad.value = false;
-             updateStatus(`目录不存在或为空: ${audioDir}`);
             return;
          }
 
-        const files = await listDirectory(audioDir);
-        audioFiles.value = files;
+        const files = await listDirectory(musicDir);
+        musicFiles.value = files;
          initialLoad.value = false;
-        console.log(`Files in ${audioDir}:`, files);
-         updateStatus(`列出文件成功，共 ${files.length} 个`);
+        console.log(`Files in ${musicDir}:`, files);
     } catch (error) {
-        console.error(`Failed to list directory ${audioDir}:`, error);
-         audioFiles.value = [];
+        console.error(`Failed to list directory ${musicDir}:`, error);
+         musicFiles.value = [];
          initialLoad.value = false;
          errorMessage.value = `列出文件失败: ${error.message}`;
-         status.value += '<br>' + `列出文件失败`;
+         status.value = `列出文件失败`;
     }
 };
 
@@ -170,30 +197,42 @@ const listAudioFiles = async () => {
 // 生命周期钩子
 onMounted(() => {
   loadInitialConfig();
-  // Automatically list files for the initial storyTitle and storyId if valid
-  if (storyTitle.value && storyId.value) {
-     listAudioFiles();
-  } else {
-      initialLoad.value = false; // Ensure flag is set if no list attempt on mount
-  }
-
+  // Automatically list files for the initial storyTitle
+  listMusicFiles();
 });
 
-// Watch for storyTitle or storyId changes to update file list
-watch([storyTitle, storyId], ([newTitle, newId], [oldTitle, oldId]) => {
-    // Only refresh if both are non-empty and at least one changed
-    if (newTitle && newId && (newTitle !== oldTitle || newId !== oldId)) {
-        listAudioFiles();
-    } else if (!newTitle || !newId) {
-        audioFiles.value = []; // Clear list if title or id becomes empty
-        initialLoad.value = false;
+// Watch for storyTitle changes to update file list
+watch(storyTitle, (newVal, oldVal) => {
+    if (newVal !== oldVal) {
+        listMusicFiles();
     }
 });
+
+// 假设全局提供了 getMusicKey, processPrompt, gpt, gptDestroy 的模拟实现
+// 如果不是全局的，请确保在 MusicGeneratorTest.vue 或其父组件中导入它们，
+// 或者通过provide/inject传递给musicGenerator.js
+
+// Mock implementations for testing purposes if they are not truly external
+// In a real app, you'd import the real ones or ensure they're globally available as expected
+/*
+import { getMusicKey as mockGetMusicKey } from './musicGenerator.js'; // Import the mocks from musicGenerator if they are exported there
+import { processPrompt as mockProcessPrompt } from './musicGenerator.js';
+import { gpt as mockGpt, gptDestroy as mockGptDestroy } from './AiModelService.js'; // Import actual mocks or real implementations
+
+// Assign mocks to global scope if musicGenerator expects them there
+// Or preferably, modify musicGenerator.js to accept these as arguments or imports
+if (typeof window !== 'undefined') {
+    window.getMusicKey = mockGetMusicKey;
+    window.processPrompt = mockProcessPrompt;
+    window.gpt = mockGpt;
+    window.gptDestroy = mockGptDestroy;
+}
+*/
 
 </script>
 
 <style scoped>
-.voice-generator-test {
+.music-generator-test {
   padding: 20px;
   font-family: sans-serif;
 }
@@ -207,26 +246,17 @@ watch([storyTitle, storyId], ([newTitle, newId], [oldTitle, oldId]) => {
 
 label {
   display: inline-block;
-  width: 180px; /* Adjusted width */
+  width: 150px;
   margin-bottom: 5px;
 }
 
-input[type="text"], input[type="number"], select {
+input[type="text"], input[type="number"] {
   width: 300px;
   padding: 5px;
   margin-bottom: 10px;
   border: 1px solid #ccc;
   border-radius: 4px;
 }
-
-.config-hint {
-    font-size: 0.9em;
-    color: #666;
-    margin-top: -5px;
-    margin-bottom: 10px;
-    margin-left: 185px; /* Align with input */
-}
-
 
 button {
   padding: 8px 15px;
@@ -245,7 +275,6 @@ button:disabled {
 
 .status-section p {
   font-weight: bold;
-  white-space: pre-wrap; /* Preserve line breaks from v-html */
 }
 
 .error-message {
@@ -269,7 +298,6 @@ button:disabled {
 .file-list-section li {
     padding: 5px 0;
     border-bottom: 1px dashed #ddd;
-    word-break: break-all; /* Prevent long paths from overflowing */
 }
 
 .file-list-section li:last-child {

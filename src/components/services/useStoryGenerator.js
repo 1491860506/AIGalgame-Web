@@ -64,8 +64,8 @@ export function useStoryGenerator() {
                 throw new Error("未能从配置中获取 story_title");
             }
             updateStatus(`获取到故事标题: ${storyTitle}`);
-            await idbFs.writeFile('/data/test/title.txt',storyTitle);
-            coreTasks.push(gettoken('music'));
+            await idbFs.writeFile('/data/source/title.txt',storyTitle);
+            //coreTasks.push(gettoken('music'));
             // --- Concurrent Tasks (Not Awaited in Main Flow) ---
             // These run in the background. Errors are logged but don't stop the primary flow immediately.
             updateStatus('启动并发任务(角色图, 背景音乐，标题图)...');
@@ -161,7 +161,7 @@ export function useStoryGenerator() {
             if (!storyData || !Array.isArray(storyData.conversations)) {
                 throw new Error(`故事文件 ${storyJsonPath} 格式无效或缺少 conversations`);
             }
-            coreTasks.push(gettoken('music'));
+            //coreTasks.push(gettoken('music'));
             updateStatus('正在处理故事文件 (添加ID, 清理地点)...');
             let previousPlace = null;
             storyData.conversations = storyData.conversations.map((conv, index) => {

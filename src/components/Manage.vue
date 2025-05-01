@@ -2,13 +2,6 @@
   <div class="manage-page">
     <div class="header">
       <h1>管理</h1>
-      <!-- Removed User Info Section -->
-      <!--
-      <div class="user-info">
-        <span class="user">{{ username }}</span>
-        <span class="timestamp">{{ timestamp }}</span>
-      </div>
-      -->
     </div>
 
     <div class="content">
@@ -194,18 +187,16 @@
 </template>
 
 <script>
+// 1. 从 'vue' 中导入 markRaw
+import { markRaw } from 'vue';
+
 export default {
   name: 'Manage',
   data() {
     return {
-      // --- Removed User Info Data ---
-      // timestamp: '...',
-      // username: '...',
-
       // System Info (Keep)
-      storageUsage: '计算中...', // Initial state
-      // lastBackup: '...', // Keep if needed, removed from template for now
-      localStorageInfo: '计算中...', // Initial state
+      storageUsage: '计算中...',
+      localStorageInfo: '计算中...',
 
       // Window States (Keep)
       showStoryModal: false,
@@ -220,28 +211,25 @@ export default {
       animateFileWindow: false,
 
       // Component References (Keep)
+      // 这些属性本身是响应式的，但它们存储的值（组件定义）通过 markRaw 来阻止响应式化
       StoryManageComponent: null,
       OutlineManageComponent: null,
       FileManageComponent: null,
-
-      // Timer for timestamp (Removed)
-      // timer: null
     };
   },
   methods: {
-    // Show Story Manager (Keep)
     async showStoryManager() {
       this.showStoryModal = true;
-      this.storyWindowLoaded = false; // Reset loaded state
+      this.storyWindowLoaded = false;
 
       if (!this.StoryManageComponent) {
         try {
-          const module = await import('./Manage_Story.vue'); // Check actual path
-          this.StoryManageComponent = module.default;
+          const module = await import('./Manage_Story.vue');
+          // 2. 使用 markRaw 包裹组件定义
+          this.StoryManageComponent = markRaw(module.default);
         } catch (error) {
           console.error('加载故事管理器组件失败:', error);
           this.showNotification('加载故事管理器组件失败', 'error');
-          // Optionally close modal on error
           this.showStoryModal = false;
           return;
         }
@@ -251,28 +239,27 @@ export default {
         this.animateStoryWindow = true;
         setTimeout(() => {
           this.storyWindowLoaded = true;
-        }, 300); // Match CSS transition
+        }, 300);
       });
     },
 
-    // Close Story Manager (Keep)
     closeStoryManager() {
       this.animateStoryWindow = false;
       setTimeout(() => {
         this.showStoryModal = false;
-        this.storyWindowLoaded = false; // Reset loaded state
-      }, 300); // Match CSS transition
+        this.storyWindowLoaded = false;
+      }, 300);
     },
 
-    // Show Outline Manager (Keep)
     async showOutlineManager() {
       this.showOutlineModal = true;
-      this.outlineWindowLoaded = false; // Reset loaded state
+      this.outlineWindowLoaded = false;
 
       if (!this.OutlineManageComponent) {
         try {
-          const module = await import('./Manage_Outline.vue'); // Check actual path
-          this.OutlineManageComponent = module.default;
+          const module = await import('./Manage_Outline.vue');
+           // 2. 使用 markRaw 包裹组件定义
+          this.OutlineManageComponent = markRaw(module.default);
         } catch (error) {
           console.error('加载大纲管理器组件失败:', error);
           this.showNotification('加载组件失败', 'error');
@@ -289,7 +276,6 @@ export default {
       });
     },
 
-    // Close Outline Manager (Keep)
     closeOutlineManager() {
       this.animateOutlineWindow = false;
       setTimeout(() => {
@@ -298,16 +284,15 @@ export default {
       }, 300);
     },
 
-    // Show File Manager (Keep)
     async showFileManager() {
       this.showFileModal = true;
-      this.fileWindowLoaded = false; // Reset loaded state
-
+      this.fileWindowLoaded = false;
 
       if (!this.FileManageComponent) {
         try {
-          const module = await import('./Manage_File.vue'); // Check actual path
-          this.FileManageComponent = module.default;
+          const module = await import('./Manage_File.vue');
+           // 2. 使用 markRaw 包裹组件定义
+          this.FileManageComponent = markRaw(module.default); // <-- 这里是关键修改
         } catch (error) {
           console.error('加载文件管理器组件失败:', error);
           this.showNotification('加载组件失败', 'error');
@@ -324,7 +309,6 @@ export default {
       });
     },
 
-    // Close File Manager (Keep)
     closeFileManager() {
       this.animateFileWindow = false;
       setTimeout(() => {
@@ -333,14 +317,11 @@ export default {
       }, 300);
     },
 
-    // Show Notification (Keep)
     showNotification(message, type = 'info') {
-      // Assuming parent component listens to this event
       this.$emit('show-message', { title: type, message: message});
       console.log(`[ManagePage][${type.toUpperCase()}] ${message}`);
     },
 
-    // Calculate IndexedDB Storage Usage (Keep)
     calculateStorageUsage() {
       try {
         if (navigator.storage && navigator.storage.estimate) {
@@ -349,7 +330,6 @@ export default {
             .then(({ usage, quota }) => {
               const usedMB = Math.round((usage / (1024 * 1024)) * 10) / 10;
               const totalGB = Math.round((quota / (1024 * 1024 * 1024)) * 10) / 10;
-              // Handle potential Infinity or NaN results
               if (isNaN(usedMB) || !isFinite(usedMB)) {
                   this.storageUsage = '无法计算使用量';
               } else if (isNaN(totalGB) || !isFinite(totalGB) || totalGB === 0) {
@@ -372,10 +352,9 @@ export default {
       }
     },
 
-    // Calculate LocalStorage Usage (Keep)
     calculateLocalStorageUsage() {
       try {
-        const sizeInBytes = this.getLocalStorageSize(); // Call UNCHANGED helper
+        const sizeInBytes = this.getLocalStorageSize();
         const sizeInKB = (sizeInBytes / 1024).toFixed(2);
         this.localStorageInfo = `${sizeInKB} KB`;
       } catch (error) {
@@ -384,54 +363,26 @@ export default {
       }
     },
 
-    // Helper to get LocalStorage size (Keep)
     getLocalStorageSize() {
-      // Handle cases where localStorage might be inaccessible
       try {
         const jsonString = JSON.stringify(localStorage);
-        // Check for string size as a fallback if Blob constructor fails
         if (typeof Blob === 'undefined') {
-             return jsonString.length * 2; // Rough estimate for UTF-16
+             return jsonString.length * 2;
         }
         const blob = new Blob([jsonString], { type: 'application/json' });
-        return blob.size; // Return size in bytes
+        return blob.size;
       } catch (e) {
           console.error('获取 localStorage size 失败:', e);
-          return 0; // Return 0 on error
+          return 0;
       }
     },
-
-    // Update Current Time (Removed)
-    /*
-    updateCurrentTime() {
-      const now = new Date();
-      // ... formatting logic ...
-      this.timestamp = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
-    }
-    */
   },
   mounted() {
-    // Calculate storage usage on mount (Keep)
     this.calculateStorageUsage();
     this.calculateLocalStorageUsage();
-
-    // Update time on mount (Removed)
-    // this.updateCurrentTime();
-
-    // Set interval for time update (Removed)
-    /*
-    this.timer = setInterval(() => {
-      this.updateCurrentTime();
-    }, 60000);
-    */
   },
   beforeDestroy() {
-    // Clear timer (Removed)
-    /*
-    if (this.timer) {
-      clearInterval(this.timer);
-    }
-    */
+    // Cleanup removed timers
   }
 };
 </script>

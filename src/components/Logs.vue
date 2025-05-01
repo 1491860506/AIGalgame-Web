@@ -1,21 +1,18 @@
 <template>
   <div class="logs-container">
-    <!-- Header Section -->
+    <!-- 头部部分 -->
     <div class="logs-header">
       <h1>系统日志</h1>
       <div class="logs-actions">
         <button class="btn btn-primary" @click="refreshLogs">
-          <!-- <i class="fas fa-sync-alt"></i> -->
           <font-awesome-icon :icon="['fas', 'sync-alt']" />
           刷新
         </button>
         <button class="btn btn-danger" @click="clearLogs">
-          <!-- <i class="fas fa-trash-alt"></i> -->
           <font-awesome-icon :icon="['fas', 'trash-alt']" />
           清除
         </button>
         <button class="btn" @click="downloadLogs">
-          <!-- <i class="fas fa-download"></i> -->
           <font-awesome-icon :icon="['fas', 'download']" />
           导出
         </button>
@@ -45,13 +42,12 @@
         </div>
       </div>
       <div class="search-box">
-        <!-- <i class="fas fa-search"></i> -->
         <font-awesome-icon :icon="['fas', 'search']" />
         <input type="text" placeholder="搜索日志..." v-model="searchQuery" />
       </div>
     </div>
 
-    <!-- Log Table -->
+    <!-- 日志表格 -->
     <div class="logs-table-container">
       <table class="logs-table">
         <thead>
@@ -64,37 +60,52 @@
         <tbody>
           <tr v-if="isLoading">
             <td colspan="3" class="loading-logs">
-              <!-- <i class="fas fa-spinner fa-spin"></i> -->
-              <font-awesome-icon :icon="['fas', 'spinner']" spin /> <!-- Use spin prop -->
+              <font-awesome-icon :icon="['fas', 'spinner']" spin />
               正在加载日志...
             </td>
           </tr>
           <tr v-else-if="filteredLogs.length === 0">
             <td colspan="3" class="no-logs">
-              <!-- <i class="fas fa-info-circle"></i> -->
               <font-awesome-icon :icon="['fas', 'info-circle']" />
               没有匹配的日志记录
             </td>
           </tr>
-          <tr v-for="(log, index) in filteredLogs" :key="index" :class="'log-row log-' + log.type">
-            <td class="type-column">
-              <span class="log-badge" :class="log.type">
-                <!-- <i :class="getIconForType(log.type)"></i> -->
-                 <!-- Update binding to use the method returning icon name -->
-                <font-awesome-icon :icon="['fas', getIconNameForType(log.type)]" />
-              </span>
-            </td>
-            <td class="timestamp-column">{{ formatTimestamp(log.timestamp) }}</td>
-            <td class="message-column">{{ log.message }}</td>
-          </tr>
+          <template v-for="(log, index) in filteredLogs" :key="index">
+  <tr :class="'log-row log-' + log.type" @click="togglestack(index)">
+    <td class="type-column">
+      <span class="log-badge" :class="log.type">
+        <font-awesome-icon :icon="['fas', getIconNameForType(log.type)]" />
+      </span>
+    </td>
+    <td class="timestamp-column">{{ formatTimestamp(log.timestamp) }}</td>
+    <td class="message-column">
+      {{ log.message }}
+      <font-awesome-icon 
+        v-if="log.stack" 
+        :icon="['fas', expandedStacks[index] ? 'chevron-up' : 'chevron-down']" 
+        class="stack-toggle-icon" 
+      />
+    </td>
+  </tr>
+  <tr v-if="log.stack && expandedStacks[index]" :class="'error-stack-row'" :key="`stack-${index}`">
+    <td colspan="3">
+      <div class="error-stack">
+        <div class="error-stack-header">
+          <font-awesome-icon :icon="['fas', 'exclamation-triangle']" />
+          <span>{{ log.stack.name || 'Error' }}: {{ log.stack.message }}</span>
+        </div>
+        <pre class="error-stack-trace">{{ formatStackTrace(log.stack) }}</pre>
+      </div>
+    </td>
+  </tr>
+          </template>
         </tbody>
       </table>
     </div>
 
-    <!-- Statistics Footer -->
+    <!-- 统计页脚 -->
     <div class="logs-footer">
       <div class="log-stats">
-        <!-- Stats remain the same -->
         <div class="stat-item">
           <span class="stat-label">总计:</span>
           <span class="stat-value">{{ logs.length }}</span>
@@ -122,7 +133,6 @@
           :disabled="currentPage === 1"
           @click="changePage(1)"
         >
-          <!-- <i class="fas fa-angle-double-left"></i> -->
           <font-awesome-icon :icon="['fas', 'angle-double-left']" />
         </button>
         <button
@@ -130,7 +140,6 @@
           :disabled="currentPage === 1"
           @click="changePage(currentPage - 1)"
         >
-          <!-- <i class="fas fa-angle-left"></i> -->
           <font-awesome-icon :icon="['fas', 'angle-left']" />
         </button>
         <span class="page-info">{{ currentPage }} / {{ pageCount }}</span>
@@ -139,7 +148,6 @@
           :disabled="currentPage === pageCount"
           @click="changePage(currentPage + 1)"
         >
-          <!-- <i class="fas fa-angle-right"></i> -->
           <font-awesome-icon :icon="['fas', 'angle-right']" />
         </button>
         <button
@@ -147,7 +155,6 @@
           :disabled="currentPage === pageCount"
           @click="changePage(pageCount)"
         >
-          <!-- <i class="fas fa-angle-double-right"></i> -->
           <font-awesome-icon :icon="['fas', 'angle-double-right']" />
         </button>
       </div>
@@ -171,8 +178,9 @@ export default {
       },
       isLoading: true,
       currentPage: 1,
-      logsPerPage: 50, // Adjust as needed
-      pageCount: 1
+      logsPerPage: 50, // 按需调整
+      pageCount: 1,
+      expandedStacks: {} // 跟踪错误堆栈展开状态
     };
   },
   methods: {
@@ -186,12 +194,12 @@ export default {
         } else {
           console.error('getStoredLogs function not found');
           this.logs = [];
-          this.applyFiltersAndPagination(); // Apply even if empty
+          this.applyFiltersAndPagination(); // 即使为空也应用
         }
       } catch (error) {
         console.error('Error loading logs:', error);
         this.logs = [];
-        this.applyFiltersAndPagination(); // Apply even on error
+        this.applyFiltersAndPagination(); // 即使出错也应用
       } finally {
         this.isLoading = false;
       }
@@ -206,7 +214,7 @@ export default {
           if (window.clearStoredLogs) {
             await window.clearStoredLogs();
             this.logs = [];
-            this.applyFiltersAndPagination(); // Update view after clearing
+            this.applyFiltersAndPagination(); // 清除后更新视图
           } else {
             console.error('clearStoredLogs function not found');
           }
@@ -223,11 +231,11 @@ export default {
         if (window.exportLogs) {
           dataToExport = await window.exportLogs();
         } else {
-          dataToExport = this.logs; // Fallback
+          dataToExport = this.logs; // 备用方案
         }
         if (!dataToExport || dataToExport.length === 0) {
-            alert("没有日志可以导出。");
-            return;
+          alert("没有日志可以导出。");
+          return;
         }
 
         const dataStr = JSON.stringify(dataToExport, null, 2);
@@ -245,16 +253,16 @@ export default {
     formatTimestamp(timestamp) {
       try {
         const date = new Date(timestamp);
-        // Check if date is valid before formatting
+        // 检查日期是否有效，然后再格式化
         return isNaN(date.getTime()) ? 'Invalid Date' : date.toLocaleString();
       } catch (e) {
-          return 'Invalid Date';
+        return 'Invalid Date';
       }
     },
-    // Renamed method to clarify it returns the icon NAME, not class
+    // 为每种类型返回图标名称
     getIconNameForType(type) {
       switch (type) {
-        case 'log': return 'info'; // Returns name 'info'
+        case 'log': return 'info'; 
         case 'info': return 'info-circle';
         case 'warn': return 'exclamation-triangle';
         case 'error': return 'exclamation-circle';
@@ -264,53 +272,85 @@ export default {
     countLogsByType(type) {
       return this.logs.filter(log => log.type === type).length;
     },
+    // 切换错误堆栈的展开/折叠状态
+    togglestack(index) {
+      if (this.filteredLogs[index].stack) {
+        this.expandedStacks[index]=!this.expandedStacks[index];
+      }
+    },
+    // 格式化堆栈跟踪信息，美化显示
+    formatStackTrace(stack) {
+      if (!stack) return '无堆栈信息';
+      
+      // 简单的堆栈美化，添加缩进和彩色格式化
+      return stack
+        .split('\n')
+        .map(line => {
+          // 区分错误信息和调用位置
+          if (line.trim().startsWith('at ')) {
+            return '  ' + line.trim();
+          }
+          return line;
+        })
+        .join('\n');
+    },
     applyFiltersAndPagination() {
-      // Apply type filters and search query
+      // 应用类型过滤和搜索查询
       const filtered = this.logs.filter(log => {
-        // Check type exists in filters object before accessing
+        // 检查类型是否存在于过滤器对象中，然后再访问
         if (!this.filters.hasOwnProperty(log.type) || !this.filters[log.type]) {
           return false;
         }
 
-        // Apply search query
+        // 应用搜索查询
         if (this.searchQuery && this.searchQuery.trim() !== '') {
           const query = this.searchQuery.toLowerCase();
-          const message = String(log.message || '').toLowerCase(); // Handle null/undefined message
+          const message = String(log.message || '').toLowerCase(); // 处理null/undefined消息
           const timestamp = this.formatTimestamp(log.timestamp).toLowerCase();
-          return message.includes(query) || timestamp.includes(query);
+          
+          // 也搜索错误堆栈（如果存在）
+          let stackMatch = false;
+          if (log.stack && log.stack.stack) {
+            stackMatch = log.stack.stack.toLowerCase().includes(query);
+          }
+          
+          return message.includes(query) || timestamp.includes(query) || stackMatch;
         }
 
         return true;
       });
 
-      // Calculate pagination
+      // 计算分页
       this.pageCount = Math.max(1, Math.ceil(filtered.length / this.logsPerPage));
 
-      // Ensure current page is valid
+      // 确保当前页面有效
       if (this.currentPage > this.pageCount) {
         this.currentPage = this.pageCount;
       }
 
-      // Apply pagination
+      // 应用分页
       const startIndex = (this.currentPage - 1) * this.logsPerPage;
       this.filteredLogs = filtered.slice(startIndex, startIndex + this.logsPerPage);
+      
+      // 重置展开状态
+      this.expandedStacks = {};
     },
     changePage(page) {
-        if (page >= 1 && page <= this.pageCount) {
-            this.currentPage = page;
-            this.applyFiltersAndPagination();
-        }
+      if (page >= 1 && page <= this.pageCount) {
+        this.currentPage = page;
+        this.applyFiltersAndPagination();
+      }
     }
   },
   watch: {
     searchQuery() {
-      this.currentPage = 1; // Reset to first page on new search
+      this.currentPage = 1; // 新搜索时重置为第一页
       this.applyFiltersAndPagination();
     },
     filters: {
       deep: true,
       handler() {
-        this.currentPage = 1; // Reset to first page on filter change
+        this.currentPage = 1; // 过滤器变化时重置为第一页
         this.applyFiltersAndPagination();
       }
     }
@@ -333,7 +373,7 @@ export default {
   box-shadow: var(--shadow);
 }
 
-/* Header */
+/* 头部 */
 .logs-header {
   display: flex;
   justify-content: space-between;
@@ -354,7 +394,7 @@ export default {
   gap: 0.5rem;
 }
 
-/* Filter Section */
+/* 过滤部分 */
 .logs-filter {
   display: flex;
   flex-wrap: wrap;
@@ -438,16 +478,19 @@ export default {
   color: var(--text-secondary);
 }
 
-/* Log Table */
+/* 日志表格 */
 .logs-table-container {
   flex: 1;
   overflow-y: auto;
   padding: 0;
 }
 
+
 .logs-table {
   width: 100%;
   border-collapse: collapse;
+  /* === 新增：设置表格布局为固定，防止内容撑开列宽 === */
+  table-layout: fixed;
 }
 
 .logs-table th {
@@ -462,14 +505,32 @@ export default {
   box-shadow: 0 1px 0 var(--border-color);
 }
 
+
 .logs-table td {
   padding: 0.75rem 1rem;
   border-bottom: 1px solid var(--border-color);
   color: var(--text-primary);
+  /* === 新增：防止td内容溢出并隐藏溢出内容 (可选，但有助于fixed layout) === */
+  overflow: hidden;
+  /* === 新增：对td内容自动换行 === */
+  white-space: normal; /* 默认值，但明确写出更清晰 */
+  word-break: normal; /* 默认值 */
+  /* === 新增：防止长单词/字符串撑开容器导致溢出 === */
+  overflow-wrap: break-word; /* 标准属性 */
+  word-wrap: break-word; /* 兼容性属性 */
 }
 
 .logs-table tbody tr:hover {
   background-color: var(--hover-bg);
+}
+
+/* 可点击的行 */
+.logs-table tbody tr.log-row {
+  cursor: default;
+}
+
+.logs-table tbody tr.log-row[data-has-stack="true"] {
+  cursor: pointer;
 }
 
 .type-column {
@@ -482,6 +543,7 @@ export default {
 
 .message-column {
   min-width: 300px;
+  position: relative;
 }
 
 .log-badge {
@@ -534,7 +596,51 @@ export default {
   animation: spin 1s infinite linear;
 }
 
-/* Stats Footer */
+/* 错误堆栈样式 */
+.error-stack-row {
+  background-color: rgba(255, 59, 48, 0.05);
+}
+
+.error-stack {
+  padding: 1rem;
+  border-radius: 4px;
+  background-color: rgba(0, 0, 0, 0.02);
+  border-left: 3px solid #ff3b30;
+  margin: 0.5rem 0;
+  overflow-x: auto;
+}
+
+.error-stack-header {
+  font-weight: 500;
+  color: #ff3b30;
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.error-stack-trace {
+  font-family: monospace;
+  font-size: 0.85rem;
+  margin: 0;
+  padding: 0.5rem;
+  white-space: pre-wrap;
+  color: var(--text-primary);
+  line-height: 1.5;
+  background-color: rgba(0, 0, 0, 0.03);
+  border-radius: 3px;
+  overflow-wrap: break-word; /* 标准属性 */
+  word-wrap: break-word; /* 兼容性属性 */
+}
+
+.stack-toggle-icon {
+  font-size: 0.8rem;
+  margin-left: 0.5rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+/* 统计页脚 */
 .logs-footer {
   padding: 1rem 1.5rem;
   border-top: 1px solid var(--border-color);
@@ -581,7 +687,7 @@ export default {
   color: #ff3b30;
 }
 
-/* Pagination */
+/* 分页 */
 .pagination {
   display: flex;
   align-items: center;
@@ -616,7 +722,7 @@ export default {
   padding: 0 0.5rem;
 }
 
-/* Buttons */
+/* 按钮 */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -661,13 +767,13 @@ export default {
   background-color: #e02e24;
 }
 
-/* Animation */
+/* 动画 */
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
 
-/* Responsive adjustments */
+/* 响应式调整 */
 @media screen and (max-width: 768px) {
   .logs-header {
     flex-direction: column;

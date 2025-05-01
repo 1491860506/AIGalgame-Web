@@ -2,7 +2,7 @@
   <div class="file-manager">
     <div class="main">
       <!-- 文件浏览区域 -->
-      <div class="content">
+      <div class="content_file">
         <!-- 路径导航 -->
         <div class="breadcrumb">
           <span @click="navigateTo('/data')">
@@ -17,9 +17,7 @@
 
             <template v-for="(segment, index) in pathSegments" :key="index">
               <span class="separator">/</span>
-              <span
-                @click="navigateTo(buildPathUpTo(index + 1))"
-              >{{ segment }}</span>
+              <span @click="navigateTo(buildPathUpTo(index + 1))">{{ segment }}</span>
             </template>
           </template>
         </div>
@@ -76,15 +74,12 @@
                 <td>-</td>
                 <td>-</td>
               </tr>
-              <tr
-                v-for="item in items"
-                :key="item.path"
-                :class="['item-row', { 'folder-row': item.isFolder }]"
-              >
+              <tr v-for="item in items" :key="item.path" :class="['item-row', { 'folder-row': item.isFolder }]">
                 <td @click="handleItemClick(item)">
                   <!-- Replace emoji span with Font Awesome component -->
                   <!-- <span class="icon">{{ getItemIcon(item) }}</span> -->
-                  <font-awesome-icon :icon="['fas', getItemIconName(item)]" :class="['item-icon-fa', { 'folder-icon-fa': item.isFolder }]" />
+                  <font-awesome-icon :icon="['fas', getItemIconName(item)]"
+                    :class="['item-icon-fa', { 'folder-icon-fa': item.isFolder }]" />
                   {{ item.name }}
                 </td>
                 <td>{{ item.isFolder ? '文件夹' : getFileType(item.name) }}</td>
@@ -100,37 +95,25 @@
                     <!-- <span class="icon">🗑️</span> -->
                     <font-awesome-icon :icon="['fas', 'trash-alt']" class="action-btn-icon-fa" />
                   </button>
-                  <button
-                    v-if="!item.isFolder && canPreview(item.name)"
-                    @click="handlePreview(item)"
-                    title="预览"
-                  >
+                  <button v-if="!item.isFolder && canPreview(item.name)" @click="handlePreview(item)" title="预览">
                     <!-- Replace emoji -->
                     <!-- <span class="icon">👁️</span> -->
                     <font-awesome-icon :icon="['fas', 'eye']" class="action-btn-icon-fa" />
                   </button>
-                  <button
-                    v-if="!item.isFolder && canEdit(item.name)"
-                    @click="handleEdit(item)"
-                    title="编辑"
-                  >
+                  <button v-if="!item.isFolder && canEdit(item.name)" @click="handleEdit(item)" title="编辑">
                     <!-- Replace emoji -->
                     <!-- <span class="icon">✏️</span> -->
                     <font-awesome-icon :icon="['fas', 'pen-to-square']" class="action-btn-icon-fa" />
                   </button>
-                  <button
-                    v-if="!item.isFolder"
-                    @click="downloadFile(item)"
-                    title="下载"
-                  >
+                  <button v-if="!item.isFolder" @click="downloadFile(item)" title="下载">
                     <!-- Replace emoji -->
                     <!-- <span class="icon">⬇️</span> -->
-                     <font-awesome-icon :icon="['fas', 'download']" class="action-btn-icon-fa" />
+                    <font-awesome-icon :icon="['fas', 'download']" class="action-btn-icon-fa" />
                   </button>
                 </td>
               </tr>
               <tr v-if="items.length === 0 && (currentPath !== '/data' || pathSegments.length > 0)" class="empty-row">
-                 <!-- Check if not at the very top level where titles are shown -->
+                <!-- Check if not at the very top level where titles are shown -->
                 <td colspan="4" class="empty-message">
                   <!-- Replace emoji -->
                   <!-- <span class="icon">ℹ️</span> -->
@@ -138,13 +121,13 @@
                   此文件夹为空
                 </td>
               </tr>
-               <!-- Add message for empty /data level if titles are empty -->
-               <tr v-if="currentPath === '/data' && items.length === 0" class="empty-row">
-                    <td colspan="4" class="empty-message">
-                         <font-awesome-icon :icon="['fas', 'info-circle']" class="empty-icon-fa" />
-                        没有可用的项目。请先配置LLM、语音、绘画等设置。
-                    </td>
-               </tr>
+              <!-- Add message for empty /data level if titles are empty -->
+              <tr v-if="currentPath === '/data' && items.length === 0" class="empty-row">
+                <td colspan="4" class="empty-message">
+                  <font-awesome-icon :icon="['fas', 'info-circle']" class="empty-icon-fa" />
+                  没有可用的项目。请先配置LLM、语音、绘画等设置。
+                </td>
+              </tr>
             </tbody>
           </table>
         </div>
@@ -159,7 +142,7 @@
           <!-- Replace close button text with Font Awesome -->
           <!-- <button class="close-btn" @click="showCreateFileModal = false">✖</button> -->
           <button class="close-btn" @click="showCreateFileModal = false">
-             <font-awesome-icon :icon="['fas', 'times']" />
+            <font-awesome-icon :icon="['fas', 'times']" />
           </button>
         </div>
         <div class="modal-body">
@@ -184,10 +167,10 @@
       <div class="modal-content">
         <div class="modal-header">
           <h2>创建新文件夹</h2>
-           <!-- Replace close button text with Font Awesome -->
+          <!-- Replace close button text with Font Awesome -->
           <!-- <button class="close-btn" @click="showCreateFolderModal = false">✖</button> -->
-           <button class="close-btn" @click="showCreateFolderModal = false">
-             <font-awesome-icon :icon="['fas', 'times']" />
+          <button class="close-btn" @click="showCreateFolderModal = false">
+            <font-awesome-icon :icon="['fas', 'times']" />
           </button>
         </div>
         <div class="modal-body">
@@ -208,10 +191,10 @@
       <div class="modal-content">
         <div class="modal-header">
           <h2>重命名{{ selectedItem && selectedItem.isFolder ? '文件夹' : '文件' }}</h2>
-           <!-- Replace close button text with Font Awesome -->
+          <!-- Replace close button text with Font Awesome -->
           <!-- <button class="close-btn" @click="showRenameModal = false">✖</button> -->
-           <button class="close-btn" @click="showRenameModal = false">
-             <font-awesome-icon :icon="['fas', 'times']" />
+          <button class="close-btn" @click="showRenameModal = false">
+            <font-awesome-icon :icon="['fas', 'times']" />
           </button>
         </div>
         <div class="modal-body">
@@ -232,19 +215,20 @@
       <div class="modal-content">
         <div class="modal-header">
           <h2>确认删除</h2>
-           <!-- Replace close button text with Font Awesome -->
+          <!-- Replace close button text with Font Awesome -->
           <!-- <button class="close-btn" @click="showDeleteModal = false">✖</button> -->
-           <button class="close-btn" @click="showDeleteModal = false">
-             <font-awesome-icon :icon="['fas', 'times']" />
+          <button class="close-btn" @click="showDeleteModal = false">
+            <font-awesome-icon :icon="['fas', 'times']" />
           </button>
         </div>
         <div class="modal-body">
           <p>确定要删除{{ selectedItem && selectedItem.isFolder ? '文件夹' : '文件' }}
-            <strong>{{ selectedItem ? selectedItem.name : '' }}</strong> 吗？</p>
+            <strong>{{ selectedItem ? selectedItem.name : '' }}</strong> 吗？
+          </p>
           <p v-if="selectedItem && selectedItem.isFolder" class="warning">
             <!-- Replace emoji -->
             <!-- <span class="icon">⚠️</span> -->
-             <font-awesome-icon :icon="['fas', 'exclamation-triangle']" />
+            <font-awesome-icon :icon="['fas', 'exclamation-triangle']" />
             警告：删除文件夹将会删除其中的所有内容！
           </p>
           <div class="form-actions">
@@ -260,38 +244,31 @@
       <div class="modal-content preview-modal">
         <div class="modal-header">
           <h2>{{ selectedItem ? selectedItem.name : '' }} 预览</h2>
-           <!-- Replace close button text with Font Awesome -->
+          <!-- Replace close button text with Font Awesome -->
           <!-- <button class="close-btn" @click="closePreview">✖</button> -->
-           <button class="close-btn" @click="closePreview">
-             <font-awesome-icon :icon="['fas', 'times']" />
+          <button class="close-btn" @click="closePreview">
+            <font-awesome-icon :icon="['fas', 'times']" />
           </button>
         </div>
         <div class="modal-body">
           <div v-if="previewLoading" class="preview-loading">
             <!-- Replace CSS spinner with Font Awesome spinner -->
             <!-- <div class="spinner"></div> -->
-             <font-awesome-icon :icon="['fas', 'spinner']" spin class="loading-spinner-fa" />
+            <font-awesome-icon :icon="['fas', 'spinner']" spin class="loading-spinner-fa" />
             <span>加载中...</span>
           </div>
           <div v-else-if="previewError" class="preview-error">
             <!-- Replace emoji -->
             <!-- <span class="icon">❌</span> -->
-             <font-awesome-icon :icon="['fas', 'circle-xmark']" />
+            <font-awesome-icon :icon="['fas', 'circle-xmark']" />
             {{ previewError }}
           </div>
           <div v-else class="preview-content">
             <!-- 根据文件类型显示不同的预览 -->
             <div v-if="isJsonFile(selectedItem?.name) && isValidJson(previewContent)" class="json-preview">
               <!-- Add show-icon and keep show-line -->
-              <vue-json-pretty
-                :data="parseJsonContent(previewContent)"
-                :deep="3"
-                :show-double-quotes="true"
-                :show-length="true"
-                :show-line="true"
-                :show-icon="true"
-                :showLineNumber="true"
-              ></vue-json-pretty>
+              <vue-json-pretty :data="parseJsonContent(previewContent)" :deep="3" :show-double-quotes="true"
+                :show-length="true" :show-line="true" :show-icon="true" :showLineNumber="true"></vue-json-pretty>
             </div>
             <div v-else-if="isJsonFile(selectedItem?.name) && !isValidJson(previewContent)" class="json-preview">
               <pre>{{ previewContent }}</pre>
@@ -330,25 +307,21 @@
       <div class="modal-content edit-modal">
         <div class="modal-header">
           <h2>编辑文件: {{ selectedItem ? selectedItem.name : '' }}</h2>
-           <!-- Replace close button text with Font Awesome -->
+          <!-- Replace close button text with Font Awesome -->
           <!-- <button class="close-btn" @click="closeEdit(false)">✖</button> -->
-           <button class="close-btn" @click="closeEdit(false)">
-             <font-awesome-icon :icon="['fas', 'times']" />
+          <button class="close-btn" @click="closeEdit(false)">
+            <font-awesome-icon :icon="['fas', 'times']" />
           </button>
         </div>
         <div class="modal-body">
           <div v-if="editError" class="edit-error">
-             <!-- Replace emoji -->
+            <!-- Replace emoji -->
             <!-- <span class="icon">❌</span> -->
-             <font-awesome-icon :icon="['fas', 'circle-xmark']" />
+            <font-awesome-icon :icon="['fas', 'circle-xmark']" />
             {{ editError }}
           </div>
           <div class="form-group">
-            <textarea
-              class="edit-textarea"
-              v-model="editContent"
-              rows="20"
-            ></textarea>
+            <textarea class="edit-textarea" v-model="editContent" rows="20"></textarea>
           </div>
           <div class="form-actions">
             <button class="cancel-btn" @click="closeEdit(false)">取消</button>
@@ -362,7 +335,7 @@
     <div v-if="notification.show" :class="['notification', notification.type]">
       <!-- Replace emoji span with Font Awesome component -->
       <!-- <span class="icon">{{ getNotificationIcon() }}</span> -->
-       <font-awesome-icon :icon="['fas', getNotificationIconName()]" class="notification-icon-fa" />
+      <font-awesome-icon :icon="['fas', getNotificationIconName()]" class="notification-icon-fa" />
       {{ notification.message }}
     </div>
 
@@ -498,9 +471,9 @@ export default {
           this.pathSegments = [];
         } else {
           // 根目录 (e.g., '/') becomes '/data' in this context
-           this.currentPath = '/data'; // Ensure it's normalized
-           this.currentTitle = '';
-           this.pathSegments = [];
+          this.currentPath = '/data'; // Ensure it's normalized
+          this.currentTitle = '';
+          this.pathSegments = [];
         }
 
         // 加载当前路径的内容
@@ -515,19 +488,19 @@ export default {
      * 导航到上一级目录 - UNCHANGED
      */
     navigateUp() {
-        // Handle navigation from '/data/some_title' back to '/data'
-       if (this.pathSegments.length === 0 && this.currentTitle !== '') {
-           this.navigateTo('/data');
-           return;
-       }
+      // Handle navigation from '/data/some_title' back to '/data'
+      if (this.pathSegments.length === 0 && this.currentTitle !== '') {
+        this.navigateTo('/data');
+        return;
+      }
 
-       // Handle navigation from '/data/title/folder1/folder2' up one level
+      // Handle navigation from '/data/title/folder1/folder2' up one level
       const lastSlashIndex = this.currentPath.lastIndexOf('/');
       if (lastSlashIndex > 0) {
         const parentPath = this.currentPath.substring(0, lastSlashIndex);
         this.navigateTo(parentPath);
       }
-       // If already at '/data' with no segments/title, do nothing.
+      // If already at '/data' with no segments/title, do nothing.
     },
 
     /**
@@ -588,12 +561,12 @@ export default {
       } else {
         // Check if previewable before attempting preview
         if (this.canPreview(item.name)) {
-             this.handlePreview(item);
-         } else if (this.canEdit(item.name)) {
-             this.handleEdit(item); // Maybe offer edit if not previewable but editable?
-         } else {
-             this.showNotification('此文件类型不支持预览或编辑', 'info');
-         }
+          this.handlePreview(item);
+        } else if (this.canEdit(item.name)) {
+          this.handleEdit(item); // Maybe offer edit if not previewable but editable?
+        } else {
+          this.showNotification('此文件类型不支持预览或编辑', 'info');
+        }
       }
     },
 
@@ -614,14 +587,14 @@ export default {
       if (!this.newItemName || this.newItemName.trim() === '' || this.newItemName === this.selectedItem.name) {
         this.showRenameModal = false;
         if (this.newItemName.trim() === '') {
-            this.showNotification('新名称不能为空', 'error');
+          this.showNotification('新名称不能为空', 'error');
         }
         return;
       }
-       if (this.newItemName.includes('/') || this.newItemName.includes('\\')) {
-           this.showNotification('名称不能包含斜杠或反斜杠', 'error');
-           return;
-       }
+      if (this.newItemName.includes('/') || this.newItemName.includes('\\')) {
+        this.showNotification('名称不能包含斜杠或反斜杠', 'error');
+        return;
+      }
 
 
       try {
@@ -632,7 +605,7 @@ export default {
         this.loadCurrentPath(); // Reload list
       } catch (error) {
         console.error('重命名失败:', error);
-         // Provide more specific error if possible, but keep original logic
+        // Provide more specific error if possible, but keep original logic
         this.showNotification('重命名失败: ' + (error.message || '未知错误'), 'error');
       }
     },
@@ -649,7 +622,7 @@ export default {
      * 执行删除 - UNCHANGED
      */
     async deleteItem() {
-       // Keep the file system interaction logic exactly as it was
+      // Keep the file system interaction logic exactly as it was
       try {
         // Call the imported function - UNCHANGED
         await deletePath(this.selectedItem.path);
@@ -661,7 +634,7 @@ export default {
         this.loadCurrentPath(); // Reload list
       } catch (error) {
         console.error('删除失败:', error);
-         // Provide more specific error if possible, but keep original logic
+        // Provide more specific error if possible, but keep original logic
         this.showNotification('删除失败: ' + (error.message || '未知错误'), 'error');
       }
     },
@@ -670,20 +643,20 @@ export default {
      * 创建文件 - UNCHANGED
      */
     async createFile() {
-       // Keep the file system interaction logic exactly as it was
+      // Keep the file system interaction logic exactly as it was
       if (!this.newFileName || this.newFileName.trim() === '') {
         this.showNotification('请输入文件名', 'error');
         return;
       }
-        if (this.newFileName.includes('/') || this.newFileName.includes('\\')) {
-           this.showNotification('文件名不能包含斜杠或反斜杠', 'error');
-           return;
-       }
+      if (this.newFileName.includes('/') || this.newFileName.includes('\\')) {
+        this.showNotification('文件名不能包含斜杠或反斜杠', 'error');
+        return;
+      }
 
 
       try {
         const filePath = `${this.currentPath}/${this.newFileName.trim()}`;
-         // Call the imported function - UNCHANGED
+        // Call the imported function - UNCHANGED
         await writeFile(filePath, this.newFileContent);
         this.showNotification(`文件 "${this.newFileName.trim()}" 已创建`, 'success');
 
@@ -694,7 +667,7 @@ export default {
         this.loadCurrentPath(); // Reload list
       } catch (error) {
         console.error('创建文件失败:', error);
-         // Provide more specific error if possible, but keep original logic
+        // Provide more specific error if possible, but keep original logic
         this.showNotification('创建文件失败: ' + (error.message || '未知错误'), 'error');
       }
     },
@@ -703,20 +676,20 @@ export default {
      * 创建文件夹 - UNCHANGED
      */
     async createFolder() {
-       // Keep the file system interaction logic exactly as it was
+      // Keep the file system interaction logic exactly as it was
       if (!this.newFolderName || this.newFolderName.trim() === '') {
         this.showNotification('请输入文件夹名', 'error');
         return;
       }
-       if (this.newFolderName.includes('/') || this.newFolderName.includes('\\')) {
-           this.showNotification('文件夹名不能包含斜杠或反斜杠', 'error');
-           return;
-       }
+      if (this.newFolderName.includes('/') || this.newFolderName.includes('\\')) {
+        this.showNotification('文件夹名不能包含斜杠或反斜杠', 'error');
+        return;
+      }
 
 
       try {
         const folderPath = `${this.currentPath}/${this.newFolderName.trim()}`;
-         // Call the imported function - UNCHANGED
+        // Call the imported function - UNCHANGED
         await createFolderFs(folderPath); // Use the aliased name if necessary, but logic unchanged
         this.showNotification(`文件夹 "${this.newFolderName.trim()}" 已创建`, 'success');
 
@@ -726,7 +699,7 @@ export default {
         this.loadCurrentPath(); // Reload list
       } catch (error) {
         console.error('创建文件夹失败:', error);
-         // Provide more specific error if possible, but keep original logic
+        // Provide more specific error if possible, but keep original logic
         this.showNotification('创建文件夹失败: ' + (error.message || '未知错误'), 'error');
       }
     },
@@ -744,10 +717,10 @@ export default {
       this.previewContent = null;
 
       try {
-         // Call the imported function - UNCHANGED
+        // Call the imported function - UNCHANGED
         const content = await readFile(item.path);
 
-         // Logic for handling different content types - UNCHANGED
+        // Logic for handling different content types - UNCHANGED
         if ((this.isImageFile(item.name) || this.isAudioFile(item.name) || this.isVideoFile(item.name)) && content instanceof Blob) {
           // If it's a media file and content is a Blob, create a URL
           this.previewContent = URL.createObjectURL(content);
@@ -759,14 +732,14 @@ export default {
           this.previewContent = content;
         }
 
-         // State updates - UNCHANGED
+        // State updates - UNCHANGED
         this.previewLoading = false;
       } catch (error) {
         console.error('预览失败:', error);
-         // State updates - UNCHANGED
+        // State updates - UNCHANGED
         this.previewError = '加载预览失败: ' + (error.message || '未知错误');
         this.previewLoading = false;
-         // Clear preview content on error
+        // Clear preview content on error
         this.previewContent = null;
       }
     },
@@ -776,15 +749,14 @@ export default {
      */
     closePreview() {
       if (this.previewContent && this.selectedItem &&
-          (this.isAudioFile(this.selectedItem?.name) ||
-           this.isVideoFile(this.selectedItem?.name) ||
-           this.isImageFile(this.selectedItem?.name)) &&
-           typeof this.previewContent === 'string' // Only revoke URL strings
-         )
-      {
+        (this.isAudioFile(this.selectedItem?.name) ||
+          this.isVideoFile(this.selectedItem?.name) ||
+          this.isImageFile(this.selectedItem?.name)) &&
+        typeof this.previewContent === 'string' // Only revoke URL strings
+      ) {
         URL.revokeObjectURL(this.previewContent);
       }
-       // State updates - UNCHANGED
+      // State updates - UNCHANGED
       this.showPreviewModal = false;
       this.previewContent = null;
       this.previewError = ''; // Also clear error state on close
@@ -794,14 +766,14 @@ export default {
      * 处理文件编辑 - UNCHANGED logic for file system interaction and state management
      */
     async handleEdit(item) {
-       // State updates - UNCHANGED
+      // State updates - UNCHANGED
       this.selectedItem = item;
       this.showEditModal = true;
       this.editError = '';
       this.editContent = ''; // Clear previous content
 
       try {
-         // Call the imported function - UNCHANGED
+        // Call the imported function - UNCHANGED
         const content = await readFile(item.path);
 
         // Logic for handling different content types - UNCHANGED
@@ -820,9 +792,9 @@ export default {
         }
       } catch (error) {
         console.error('加载编辑内容失败:', error);
-         // State updates - UNCHANGED
+        // State updates - UNCHANGED
         this.editError = '加载文件内容失败: ' + (error.message || '未知错误');
-         this.editContent = ''; // Ensure edit content is empty on error
+        this.editContent = ''; // Ensure edit content is empty on error
       }
     },
 
@@ -832,37 +804,37 @@ export default {
     closeEdit(saved = false) {
       // Logic for checking unsaved changes and closing - UNCHANGED
       if (!saved && this.editContent && this.selectedItem) {
-           // Simple check for modification (can be improved)
-           let originalContentFormatted = '';
-            try {
-                 const originalContent = localStorage.getItem(`file-content-${this.selectedItem.path}`); // Assuming you might store original content here? Or need to re-read? Re-reading is safer but complex. Let's stick to the simple check based on existence of content in the textarea after loading. A more robust check would compare loaded content vs edited content. For this task, we keep the original logic's intent.
-                 if (this.isJsonFile(this.selectedItem.name) && this.isValidJson(originalContent)) {
-                      originalContentFormatted = typeof originalContent === 'object' ? JSON.stringify(originalContent, null, 2) : JSON.stringify(JSON.parse(originalContent), null, 2);
-                 } else {
-                      originalContentFormatted = String(originalContent || '');
-                 }
-            } catch {
-                 originalContentFormatted = ''; // Fallback if can't get/parse original
-            }
+        // Simple check for modification (can be improved)
+        let originalContentFormatted = '';
+        try {
+          const originalContent = localStorage.getItem(`file-content-${this.selectedItem.path}`); // Assuming you might store original content here? Or need to re-read? Re-reading is safer but complex. Let's stick to the simple check based on existence of content in the textarea after loading. A more robust check would compare loaded content vs edited content. For this task, we keep the original logic's intent.
+          if (this.isJsonFile(this.selectedItem.name) && this.isValidJson(originalContent)) {
+            originalContentFormatted = typeof originalContent === 'object' ? JSON.stringify(originalContent, null, 2) : JSON.stringify(JSON.parse(originalContent), null, 2);
+          } else {
+            originalContentFormatted = String(originalContent || '');
+          }
+        } catch {
+          originalContentFormatted = ''; // Fallback if can't get/parse original
+        }
 
-           // A more accurate check would be: if editContent is different from the *loaded* content
-           // Re-reading the original content here is complex and might slow things down.
-           // Let's assume the original simple check `this.editContent` is sufficient for the user's context
-           // or base the warning on the *loaded* content vs `this.editContent`.
-           // Let's add a flag maybe? Or compare `this.editContent` with the *initially loaded* content.
-           // For this task, we strictly follow "do not modify other logic". So the simple check remains.
-            if (confirm('您有未保存的更改，确定要关闭吗？')) {
-                this.showEditModal = false;
-                this.editContent = ''; // Clear state on close
-                this.editError = ''; // Clear error state on close
-                this.selectedItem = null; // Clear selected item
-            }
+        // A more accurate check would be: if editContent is different from the *loaded* content
+        // Re-reading the original content here is complex and might slow things down.
+        // Let's assume the original simple check `this.editContent` is sufficient for the user's context
+        // or base the warning on the *loaded* content vs `this.editContent`.
+        // Let's add a flag maybe? Or compare `this.editContent` with the *initially loaded* content.
+        // For this task, we strictly follow "do not modify other logic". So the simple check remains.
+        if (confirm('您有未保存的更改，确定要关闭吗？')) {
+          this.showEditModal = false;
+          this.editContent = ''; // Clear state on close
+          this.editError = ''; // Clear error state on close
+          this.selectedItem = null; // Clear selected item
+        }
       } else {
-         // State updates - UNCHANGED
+        // State updates - UNCHANGED
         this.showEditModal = false;
         this.editContent = ''; // Clear state on close
         this.editError = ''; // Clear error state on close
-         this.selectedItem = null; // Clear selected item
+        this.selectedItem = null; // Clear selected item
       }
     },
 
@@ -876,8 +848,8 @@ export default {
         this.closeEdit(true); // Close as saved if nothing to save
         return;
       }
-        // Trim content before saving? Original didn't do it, so we don't add it.
-        // const contentToSave = this.editContent;
+      // Trim content before saving? Original didn't do it, so we don't add it.
+      // const contentToSave = this.editContent;
 
 
       try {
@@ -902,14 +874,14 @@ export default {
         // Or strictly pass string as original code implies.
         // Let's stick to passing the string currently in `editContent`.
         let contentToSave = this.editContent;
-         if (this.isJsonFile(this.selectedItem.name) && this.isValidJson(this.editContent)) {
+        if (this.isJsonFile(this.selectedItem.name) && this.isValidJson(this.editContent)) {
           await writeFile(this.selectedItem.path, JSON.parse(contentToSave));
 
-         }
-        else{
-        await writeFile(this.selectedItem.path, contentToSave); // Call the imported function - UNCHANGED
         }
-         // State updates - UNCHANGED
+        else {
+          await writeFile(this.selectedItem.path, contentToSave); // Call the imported function - UNCHANGED
+        }
+        // State updates - UNCHANGED
         this.showNotification('文件保存成功', 'success');
         this.closeEdit(true); // Close and indicate saved
 
@@ -918,7 +890,7 @@ export default {
 
       } catch (error) {
         console.error('保存文件失败:', error);
-         // State updates - UNCHANGED
+        // State updates - UNCHANGED
         this.editError = '保存文件失败: ' + (error.message || '未知错误');
         this.showNotification('保存文件失败', 'error');
       }
@@ -969,7 +941,7 @@ export default {
         this.showNotification(`文件 "${fileName}" 下载成功`, 'success');
       } catch (error) {
         console.error('下载文件失败:', error);
-         // Provide more specific error if possible, but keep original logic
+        // Provide more specific error if possible, but keep original logic
         this.showNotification('下载文件失败: ' + (error.message || '未知错误'), 'error');
       }
     },
@@ -1218,8 +1190,8 @@ export default {
      * 格式化JSON展示 (Method exists but is not used in template after adding vue-json-pretty) - UNCHANGED
      */
     formatJson(json) {
-       // This method is likely deprecated after introducing vue-json-pretty
-       // but keeping it unchanged as requested if it exists
+      // This method is likely deprecated after introducing vue-json-pretty
+      // but keeping it unchanged as requested if it exists
       try {
         if (typeof json === 'string') {
           return JSON.stringify(JSON.parse(json), null, 2);
@@ -1230,11 +1202,11 @@ export default {
       }
     },
 
-        /**
-     * Trigger the hidden file input click
-     * ADDED METHOD
-     */
-     triggerFileUpload() {
+    /**
+ * Trigger the hidden file input click
+ * ADDED METHOD
+ */
+    triggerFileUpload() {
       // Ensure we are in a directory where upload is allowed
       this.$refs.fileInput.click();
     },
@@ -1243,7 +1215,7 @@ export default {
      * Handle file selection and upload
      * ADDED METHOD
      */
-     async handleFileUpload(event) {
+    async handleFileUpload(event) {
       const files = event.target.files;
       if (!files || files.length === 0) {
         // No file selected or dialog was cancelled
@@ -1269,18 +1241,18 @@ export default {
           if (this.isValidJson(textContent)) {
             // If valid JSON string, parse it into an object for saving
             contentToSave = JSON.parse(textContent);
-             // Optional log: console.log(`Uploaded JSON file "${file.name}" is valid, saving as object.`);
+            // Optional log: console.log(`Uploaded JSON file "${file.name}" is valid, saving as object.`);
           } else {
             // If invalid JSON string, save as a string
             contentToSave = textContent;
-             // Optional log: console.log(`Uploaded JSON file "${file.name}" is invalid, saving as string.`);
-             // Notify the user that it was saved as text
-             this.showNotification(`文件 "${file.name}" 不是有效的JSON，将以纯文本保存`, 'warning');
+            // Optional log: console.log(`Uploaded JSON file "${file.name}" is invalid, saving as string.`);
+            // Notify the user that it was saved as text
+            this.showNotification(`文件 "${file.name}" 不是有效的JSON，将以纯文本保存`, 'warning');
           }
         } else {
           // For non-JSON files, pass the File object directly (assuming writeFile handles Blob/File)
           contentToSave = file;
-           // Optional log: console.log(`Uploaded file "${file.name}" is not JSON, saving directly.`);
+          // Optional log: console.log(`Uploaded file "${file.name}" is not JSON, saving directly.`);
         }
 
         // Call the imported writeFile function with the prepared content
@@ -1308,39 +1280,50 @@ export default {
 .file-manager {
   font-family: 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   width: 100%;
-  height: 100%; /* Or adjust based on parent layout */
+  height: 100%;
+  /* Or adjust based on parent layout */
   color: var(--text-primary, #1e293b);
   background-color: var(--content-bg, #ffffff);
   border-radius: 8px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-  display: flex; /* Make it a flex container */
-  flex-direction: column; /* Stack children vertically */
-  overflow: hidden; /* Hide overflow if child content is too large */
+  display: flex;
+  /* Make it a flex container */
+  flex-direction: column;
+  /* Stack children vertically */
+  overflow: hidden;
+  /* Hide overflow if child content is too large */
 }
 
 .main {
   display: flex;
-  flex-direction: column; /* Stack children vertically */
-  gap: 0; /* Remove gap as content takes full width */
-  flex: 1; /* Allow main content to grow */
-  overflow: hidden; /* Hide overflow */
+  flex-direction: column;
+  /* Stack children vertically */
+  gap: 0;
+  /* Remove gap as content takes full width */
+  flex: 1;
+  /* Allow main content to grow */
+  overflow: hidden;
+  /* Hide overflow */
 }
 
-.content {
+.content_file {
   flex: 1;
   display: flex;
   flex-direction: column;
   background-color: var(--content-bg, #ffffff);
   /* border-radius already on file-manager, remove from content */
   border-radius: 0;
-  overflow: hidden; /* Hide overflow */
+  overflow: hidden;
+  /* Hide overflow */
 }
 
 /* Style for Font Awesome icons */
 /* Base style for all Font Awesome icons in this component */
 .file-manager .svg-inline--fa {
-    vertical-align: middle; /* Align icons nicely with text */
-    font-size: 1em; /* Default size relative to parent font size */
+  vertical-align: middle;
+  /* Align icons nicely with text */
+  font-size: 1em;
+  /* Default size relative to parent font size */
 }
 
 /* Generic icon wrapper style (if still needed, but styling SVG directly is better) */
@@ -1348,34 +1331,53 @@ export default {
 
 /* Specific icon styles based on usage */
 .breadcrumb-icon-fa {
-    font-size: 1.1em; /* Slightly larger for breadcrumb */
+  font-size: 1.1em;
+  /* Slightly larger for breadcrumb */
 }
+
 .btn-icon-fa {
-    font-size: 0.9em; /* Slightly smaller for buttons */
+  font-size: 0.9em;
+  /* Slightly smaller for buttons */
 }
+
 .item-icon-fa {
-    font-size: 1.1em; /* Slightly larger for file/folder items */
-    width: 1.1em; /* Fixed width for consistency */
-    text-align: center; /* Center the icon */
+  font-size: 1.1em;
+  /* Slightly larger for file/folder items */
+  width: 1.1em;
+  /* Fixed width for consistency */
+  text-align: center;
+  /* Center the icon */
 }
+
 /* Specific color for folder icons */
 .folder-icon-fa {
-    color: #e9b839; /* Maintain folder color */
+  color: #e9b839;
+  /* Maintain folder color */
 }
+
 .action-btn-icon-fa {
-    font-size: 0.9em; /* Smaller for action buttons */
+  font-size: 0.9em;
+  /* Smaller for action buttons */
 }
+
 .empty-icon-fa {
-    font-size: 1.2em; /* Larger for empty state message */
-    margin-right: 8px; /* Space after icon */
+  font-size: 1.2em;
+  /* Larger for empty state message */
+  margin-right: 8px;
+  /* Space after icon */
 }
+
 .loading-spinner-fa {
-    font-size: 2em; /* Larger spinner */
-    color: var(--primary-color, #4f46e5); /* Spinner color */
-    /* Animation is handled by Font Awesome spin prop */
+  font-size: 2em;
+  /* Larger spinner */
+  color: var(--primary-color, #4f46e5);
+  /* Spinner color */
+  /* Animation is handled by Font Awesome spin prop */
 }
+
 .notification-icon-fa {
-    font-size: 1.2em; /* Larger for notifications */
+  font-size: 1.2em;
+  /* Larger for notifications */
 }
 
 
@@ -1386,7 +1388,8 @@ export default {
   background-color: var(--sidebar-bg, #f8fafc);
   border-bottom: 1px solid var(--border-color, #e2e8f0);
   overflow-x: auto;
-  flex-shrink: 0; /* Prevent breadcrumb from shrinking */
+  flex-shrink: 0;
+  /* Prevent breadcrumb from shrinking */
 }
 
 .breadcrumb span {
@@ -1396,7 +1399,8 @@ export default {
   display: flex;
   align-items: center;
   gap: 5px;
-  white-space: nowrap; /* Prevent breadcrumb segments from wrapping */
+  white-space: nowrap;
+  /* Prevent breadcrumb segments from wrapping */
 }
 
 .breadcrumb span:hover {
@@ -1417,7 +1421,8 @@ export default {
   gap: 10px;
   background-color: var(--content-bg, #ffffff);
   border-bottom: 1px solid var(--border-color, #e2e8f0);
-  flex-shrink: 0; /* Prevent actions from shrinking */
+  flex-shrink: 0;
+  /* Prevent actions from shrinking */
 }
 
 .actions button {
@@ -1455,8 +1460,10 @@ export default {
 }
 
 .files-container {
-  flex: 1; /* Allow file list to take available space */
-  overflow-y: auto; /* Enable scrolling for the file list */
+  flex: 1;
+  /* Allow file list to take available space */
+  overflow-y: auto;
+  /* Enable scrolling for the file list */
   padding: 15px;
 }
 
@@ -1485,7 +1492,8 @@ export default {
   padding: 12px 16px;
   border-bottom: 1px solid var(--border-color, #e2e8f0);
   transition: background-color 0.2s;
-  word-break: break-word; /* Allow text to break */
+  word-break: break-word;
+  /* Allow text to break */
 }
 
 .item-row:hover td {
@@ -1504,7 +1512,8 @@ export default {
   display: flex;
   gap: 8px;
   justify-content: flex-end;
-  white-space: nowrap; /* Prevent buttons from wrapping */
+  white-space: nowrap;
+  /* Prevent buttons from wrapping */
 }
 
 .actions-cell button {
@@ -1531,10 +1540,12 @@ export default {
   padding: 40px 0;
   color: var(--text-secondary, #64748b);
   font-style: italic;
-  display: flex; /* Use flex to align icon and text */
+  display: flex;
+  /* Use flex to align icon and text */
   align-items: center;
   justify-content: center;
-  gap: 8px; /* Space between icon and text */
+  gap: 8px;
+  /* Space between icon and text */
 }
 
 /* 模态框样式 */
@@ -1557,6 +1568,7 @@ export default {
   from {
     opacity: 0;
   }
+
   to {
     opacity: 1;
   }
@@ -1569,8 +1581,10 @@ export default {
   max-width: 500px;
   box-shadow: 0 4px 25px rgba(0, 0, 0, 0.15);
   overflow: hidden;
-  display: flex; /* Make modal content flex */
-  flex-direction: column; /* Stack children */
+  display: flex;
+  /* Make modal content flex */
+  flex-direction: column;
+  /* Stack children */
   animation: slideIn 0.3s ease-out;
 }
 
@@ -1579,16 +1593,20 @@ export default {
     transform: translateY(20px);
     opacity: 0;
   }
+
   to {
     transform: translateY(0);
     opacity: 1;
   }
 }
 
-.preview-modal, .edit-modal {
+.preview-modal,
+.edit-modal {
   max-width: 800px;
-  max-height: 81vh; /* Increased max height */
-  width: 95%; /* Wider on larger screens */
+  max-height: 81vh;
+  /* Increased max height */
+  width: 95%;
+  /* Wider on larger screens */
 }
 
 .modal-header {
@@ -1598,7 +1616,8 @@ export default {
   padding: 16px 20px;
   border-bottom: 1px solid var(--border-color, #e2e8f0);
   background-color: var(--sidebar-bg, #f8fafc);
-  flex-shrink: 0; /* Prevent header from shrinking */
+  flex-shrink: 0;
+  /* Prevent header from shrinking */
 }
 
 .modal-header h2 {
@@ -1611,11 +1630,13 @@ export default {
 .close-btn {
   background: none;
   border: none;
-  font-size: 24px; /* Font size determines icon size for Font Awesome */
+  font-size: 24px;
+  /* Font size determines icon size for Font Awesome */
   cursor: pointer;
   color: var(--text-secondary, #64748b);
   transition: color 0.2s, background-color 0.2s;
-  display: flex; /* Ensure flex for centering icon */
+  display: flex;
+  /* Ensure flex for centering icon */
   align-items: center;
   justify-content: center;
   width: 32px;
@@ -1627,16 +1648,21 @@ export default {
   color: var(--text-primary, #1e293b);
   background-color: rgba(0, 0, 0, 0.05);
 }
-.close-btn svg { /* Style the SVG inside the close button */
-   font-size: 1em; /* Make SVG size relative to button font-size */
-   vertical-align: middle;
+
+.close-btn svg {
+  /* Style the SVG inside the close button */
+  font-size: 1em;
+  /* Make SVG size relative to button font-size */
+  vertical-align: middle;
 }
 
 
 .modal-body {
   padding: 20px;
-  flex: 1; /* Allow body to grow */
-  overflow-y: auto; /* Enable scrolling for the body */
+  flex: 1;
+  /* Allow body to grow */
+  overflow-y: auto;
+  /* Enable scrolling for the body */
   /* max-height removed, flex handles height */
 }
 
@@ -1651,7 +1677,8 @@ export default {
   color: var(--text-primary, #1e293b);
 }
 
-.form-group input, .form-group textarea {
+.form-group input,
+.form-group textarea {
   width: 100%;
   padding: 12px;
   border: 1px solid var(--border-color, #e2e8f0);
@@ -1663,7 +1690,8 @@ export default {
   color: var(--text-primary, #1e293b);
 }
 
-.form-group input:focus, .form-group textarea:focus {
+.form-group input:focus,
+.form-group textarea:focus {
   outline: none;
   border-color: var(--primary-color, #4f46e5);
   box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.2);
@@ -1707,9 +1735,11 @@ export default {
   align-items: center;
   gap: 8px;
 }
-.edit-error svg { /* Style icon in error message */
-    font-size: 1.1em;
-    vertical-align: middle;
+
+.edit-error svg {
+  /* Style icon in error message */
+  font-size: 1.1em;
+  vertical-align: middle;
 }
 
 
@@ -1718,7 +1748,8 @@ export default {
   justify-content: flex-end;
   gap: 12px;
   margin-top: 24px;
-  flex-shrink: 0; /* Prevent actions from shrinking */
+  flex-shrink: 0;
+  /* Prevent actions from shrinking */
 }
 
 .form-actions button {
@@ -1739,13 +1770,15 @@ export default {
   background-color: var(--border-color, #e2e8f0);
 }
 
-.create-btn, .save-btn {
+.create-btn,
+.save-btn {
   background-color: var(--primary-color, #4f46e5);
   color: white;
   box-shadow: 0 2px 4px rgba(79, 70, 229, 0.2);
 }
 
-.create-btn:hover, .save-btn:hover {
+.create-btn:hover,
+.save-btn:hover {
   background-color: var(--primary-hover, #4338ca);
   transform: translateY(-1px);
   box-shadow: 0 4px 6px rgba(79, 70, 229, 0.3);
@@ -1774,9 +1807,11 @@ export default {
   align-items: center;
   gap: 10px;
 }
-.warning svg { /* Style icon in warning message */
-    font-size: 1.1em;
-    vertical-align: middle;
+
+.warning svg {
+  /* Style icon in warning message */
+  font-size: 1.1em;
+  vertical-align: middle;
 }
 
 
@@ -1790,6 +1825,7 @@ export default {
   color: var(--text-secondary, #64748b);
   gap: 16px;
 }
+
 /* Spinner animation handled by Font Awesome prop */
 /* .spinner { ... animation } */
 
@@ -1804,14 +1840,17 @@ export default {
   align-items: center;
   gap: 10px;
 }
-.preview-error svg { /* Style icon in error message */
-    font-size: 1.1em;
-    vertical-align: middle;
+
+.preview-error svg {
+  /* Style icon in error message */
+  font-size: 1.1em;
+  vertical-align: middle;
 }
 
 
 
-.json-preview pre, .text-preview pre {
+.json-preview pre,
+.text-preview pre {
   background-color: var(--hover-bg, #f1f5f9);
   padding: 16px;
   border-radius: 8px;
@@ -1819,8 +1858,10 @@ export default {
   font-family: 'SFMono-Regular', Consolas, monospace;
   font-size: 13px;
   line-height: 1.5;
-  white-space: pre-wrap; /* Allow text wrapping */
-  word-break: break-word; /* Break long words */
+  white-space: pre-wrap;
+  /* Allow text wrapping */
+  word-break: break-word;
+  /* Break long words */
 }
 
 .image-preview {
@@ -1832,7 +1873,8 @@ export default {
 
 .image-preview img {
   max-width: 100%;
-  max-height: 60vh; /* Keep max height */
+  max-height: 60vh;
+  /* Keep max height */
   object-fit: contain;
   border-radius: 8px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
@@ -1864,7 +1906,8 @@ export default {
 .audio-name {
   font-weight: 600;
   color: var(--text-primary, #1e293b);
-  word-break: break-word; /* Ensure name wraps if too long */
+  word-break: break-word;
+  /* Ensure name wraps if too long */
 }
 
 .audio-size {
@@ -1882,7 +1925,8 @@ export default {
 
 .video-preview video {
   max-width: 100%;
-  max-height: 60vh; /* Keep max height */
+  max-height: 60vh;
+  /* Keep max height */
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
@@ -1897,7 +1941,8 @@ export default {
   font-size: 14px;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
   z-index: 1100;
-  animation: slide-in 0.3s ease forwards, fade-out 0.3s ease 2.7s forwards; /* Added forwards */
+  animation: slide-in 0.3s ease forwards, fade-out 0.3s ease 2.7s forwards;
+  /* Added forwards */
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1924,6 +1969,7 @@ export default {
     transform: translateX(100%);
     opacity: 0;
   }
+
   to {
     transform: translateX(0);
     opacity: 1;
@@ -1934,6 +1980,7 @@ export default {
   from {
     opacity: 1;
   }
+
   to {
     opacity: 0;
   }
@@ -1942,42 +1989,57 @@ export default {
 /* Deep mode (scoped styles) */
 /* Style vue-json-pretty nodes for dark mode */
 .file-manager.dark-theme .json-preview .vjs-tree-node {
-   color: var(--text-secondary);
+  color: var(--text-secondary);
 }
+
 .file-manager.dark-theme .json-preview .vjs-key {
-    color: var(--text-primary);
+  color: var(--text-primary);
 }
+
 .file-manager.dark-theme .json-preview .vjs-string {
-    color: #a78bfa; /* Example purple */
+  color: #a78bfa;
+  /* Example purple */
 }
+
 .file-manager.dark-theme .json-preview .vjs-number {
-     color: #fcd34d; /* Example yellow */
+  color: #fcd34d;
+  /* Example yellow */
 }
+
 .file-manager.dark-theme .json-preview .vjs-boolean {
-    color: #10b981; /* Example green */
+  color: #10b981;
+  /* Example green */
 }
+
 .file-manager.dark-theme .json-preview .vjs-null {
-    color: #ef4444; /* Example red */
+  color: #ef4444;
+  /* Example red */
 }
+
 .file-manager.dark-theme .json-preview .vjs-arrow {
-    color: var(--text-secondary);
+  color: var(--text-secondary);
 }
+
 .file-manager.dark-theme .json-preview .vjs-edit-box {
-     background-color: var(--hover-bg);
-     color: var(--text-primary);
-     border-color: var(--border-color);
+  background-color: var(--hover-bg);
+  color: var(--text-primary);
+  border-color: var(--border-color);
 }
+
 .file-manager.dark-theme .json-preview .vjs-edit-btn {
-     color: var(--primary-color);
+  color: var(--primary-color);
 }
 
 
 /* Responsive design */
 @media (max-width: 768px) {
   .file-manager {
-      min-height: calc(100vh - 2rem); /* Adjust height for smaller screens */
-      margin: 0.5rem; /* Add margin */
+    min-height: calc(100vh - 2rem);
+    /* Adjust height for smaller screens */
+    margin: 0.5rem;
+    /* Add margin */
   }
+
   .main {
     /* flex-direction: column; - already set */
     gap: 0;
@@ -1987,12 +2049,14 @@ export default {
     padding: 10px;
     font-size: 13px;
   }
-   .breadcrumb-icon-fa {
-       font-size: 1em;
-   }
-   .separator {
-       margin: 0 5px;
-   }
+
+  .breadcrumb-icon-fa {
+    font-size: 1em;
+  }
+
+  .separator {
+    margin: 0 5px;
+  }
 
 
   .actions {
@@ -2005,9 +2069,10 @@ export default {
     font-size: 13px;
     gap: 6px;
   }
-   .btn-icon-fa {
-       font-size: 0.8em;
-   }
+
+  .btn-icon-fa {
+    font-size: 0.8em;
+  }
 
 
   .files-table th,
@@ -2018,29 +2083,34 @@ export default {
 
   .files-table th:nth-child(3),
   .files-table td:nth-child(3) {
-    display: none; /* Hide size column on small screens */
+    display: none;
+    /* Hide size column on small screens */
   }
 
-    .item-row td:first-child {
-        gap: 6px;
-    }
-     .item-icon-fa {
-         font-size: 1em;
-         width: 1em;
-     }
+  .item-row td:first-child {
+    gap: 6px;
+  }
+
+  .item-icon-fa {
+    font-size: 1em;
+    width: 1em;
+  }
 
 
   .actions-cell {
     gap: 6px;
-    justify-content: center; /* Center actions on mobile */
+    justify-content: center;
+    /* Center actions on mobile */
   }
-   .actions-cell button {
-       width: 28px;
-       height: 28px;
-   }
-    .action-btn-icon-fa {
-        font-size: 0.8em;
-    }
+
+  .actions-cell button {
+    width: 28px;
+    height: 28px;
+  }
+
+  .action-btn-icon-fa {
+    font-size: 0.8em;
+  }
 
 
   .empty-message {
@@ -2048,93 +2118,113 @@ export default {
     font-size: 14px;
     gap: 6px;
   }
-   .empty-icon-fa {
-       font-size: 1.1em;
-   }
+
+  .empty-icon-fa {
+    font-size: 1.1em;
+  }
 
 
   .modal-content {
     width: 95%;
   }
 
-  .preview-modal, .edit-modal {
+  .preview-modal,
+  .edit-modal {
     width: 95%;
     max-height: 90vh;
   }
-   .modal-header {
-       padding: 12px 15px;
-   }
-    .modal-header h2 {
-        font-size: 16px;
-    }
-    .close-btn {
-        font-size: 20px; /* Adjust close button icon size */
-        width: 28px;
-        height: 28px;
-    }
+
+  .modal-header {
+    padding: 12px 15px;
+  }
+
+  .modal-header h2 {
+    font-size: 16px;
+  }
+
+  .close-btn {
+    font-size: 20px;
+    /* Adjust close button icon size */
+    width: 28px;
+    height: 28px;
+  }
 
   .modal-body {
-      padding: 15px;
+    padding: 15px;
   }
-   .form-group label {
-       font-size: 14px;
-   }
-   .form-group input, .form-group textarea {
-       padding: 10px;
-       font-size: 13px;
-   }
-   .edit-textarea {
-       min-height: 200px; /* Reduce min-height */
-       font-size: 13px;
-   }
-   .edit-error {
-       padding: 10px;
-       font-size: 13px;
-       gap: 6px;
-   }
-    .edit-error svg, .warning svg { /* Adjust icons in messages */
-        font-size: 1em;
-    }
+
+  .form-group label {
+    font-size: 14px;
+  }
+
+  .form-group input,
+  .form-group textarea {
+    padding: 10px;
+    font-size: 13px;
+  }
+
+  .edit-textarea {
+    min-height: 200px;
+    /* Reduce min-height */
+    font-size: 13px;
+  }
+
+  .edit-error {
+    padding: 10px;
+    font-size: 13px;
+    gap: 6px;
+  }
+
+  .edit-error svg,
+  .warning svg {
+    /* Adjust icons in messages */
+    font-size: 1em;
+  }
 
 
   .form-actions {
     gap: 8px;
     margin-top: 15px;
   }
-   .form-actions button {
-       padding: 8px 15px;
-       font-size: 13px;
-   }
 
-   .warning {
-       padding: 10px;
-       font-size: 13px;
-       gap: 8px;
-       margin-top: 10px;
-   }
+  .form-actions button {
+    padding: 8px 15px;
+    font-size: 13px;
+  }
+
+  .warning {
+    padding: 10px;
+    font-size: 13px;
+    gap: 8px;
+    margin-top: 10px;
+  }
 
   .preview-loading {
-      padding: 30px;
-      gap: 10px;
-      font-size: 14px;
+    padding: 30px;
+    gap: 10px;
+    font-size: 14px;
   }
-   .loading-spinner-fa {
-       font-size: 1.8em;
-   }
 
-   .preview-error {
-       padding: 12px;
-       font-size: 13px;
-       gap: 8px;
-   }
+  .loading-spinner-fa {
+    font-size: 1.8em;
+  }
 
-   .image-preview, .audio-preview, .video-preview {
-       padding: 10px;
-   }
-   .audio-info {
-       font-size: 13px;
-       gap: 3px;
-   }
+  .preview-error {
+    padding: 12px;
+    font-size: 13px;
+    gap: 8px;
+  }
+
+  .image-preview,
+  .audio-preview,
+  .video-preview {
+    padding: 10px;
+  }
+
+  .audio-info {
+    font-size: 13px;
+    gap: 3px;
+  }
 
 
   .notification {
@@ -2144,8 +2234,9 @@ export default {
     font-size: 13px;
     gap: 8px;
   }
-    .notification-icon-fa {
-        font-size: 1.1em;
-    }
+
+  .notification-icon-fa {
+    font-size: 1.1em;
+  }
 }
 </style>

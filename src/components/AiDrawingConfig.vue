@@ -477,7 +477,7 @@ export default {
         localStorage.setItem('aiGalgameConfig', JSON.stringify(mergedConfig));
         
         // Log the save operation (for debugging)
-        console.log(`Configuration saved at ${this.currentTimestamp} by user ${window.username || 'djfaaa'}`);
+        console.log(`Configuration saved at ${this.currentTimestamp}`);
       } catch (error) {
         console.error('Error saving config:', error);
         this.showNotification('保存配置时发生错误', 'error');
@@ -757,7 +757,7 @@ export default {
       this.showNotification(`配置 '${this.selectedConfig}' 已保存！`);
       
       // Log the save operation
-      console.log(`Configuration saved at ${this.currentTimestamp} by user ${window.username || 'djfaaa'}`);
+      console.log(`Configuration saved at ${this.currentTimestamp}`);
     },
     
     clearConfigFields() {

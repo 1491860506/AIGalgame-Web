@@ -182,6 +182,10 @@ export default {
           if (indexToRemove !== -1) {
             titles.splice(indexToRemove, 1);
           }
+        indexToRemove = titles.indexOf('source');
+          if (indexToRemove !== -1) {
+            titles.splice(indexToRemove, 1);
+          }
         console.log('Fetched story titles:', titles);
 
         // Create a story object for each title and try to load the cover - UNCHANGED logic structure

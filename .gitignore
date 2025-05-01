@@ -9,7 +9,7 @@ lerna-debug.log*
 test.zip
 node_modules
 .DS_Store
-#dist
+dist
 dist/rembg-model/*
 dist-ssr
 coverage

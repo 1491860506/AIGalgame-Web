@@ -720,7 +720,7 @@ onMounted(async () => {
     const storyTitle = config?.剧情?.story_title;
 
     if (storyTitle) {
-      await idbFs.writeFile('/data/test/title.txt',storyTitle);
+      await idbFs.writeFile('/data/source/title.txt',storyTitle);
       progressLog.value.push(`发现故事标题: ${storyTitle}`);
       const zwPath = `/data/${storyTitle}/zw`;
       progressLog.value.push(`检查标记文件: ${zwPath}...`);

@@ -569,7 +569,7 @@ let cachedTitle = null;
 let titleFetchInProgress = null;
 
 /**
- * Fetches the title from '/data/test/title.txt', using a simple cache.
+ * Fetches the title from '/data/source/title.txt', using a simple cache.
  * @returns {Promise<string>} The title content.
  * @throws {Error} If the title file cannot be read.
  */
@@ -581,16 +581,16 @@ async function getDynamicTitle() {
 
     titleFetchInProgress = (async () => {
         try {
-            console.log("[SW] Fetching dynamic title from /data/test/title.txt");
-            const titleContent = await readFile('/data/test/title.txt'); // Use readFile
+            console.log("[SW] Fetching dynamic title from /data/source/title.txt");
+            const titleContent = await readFile('/data/source/title.txt'); // Use readFile
             if (typeof titleContent !== 'string' || !titleContent.trim()) {
-                throw new Error("Title content read from /data/test/title.txt is empty or not a string.");
+                throw new Error("Title content read from /data/source/title.txt is empty or not a string.");
             }
             cachedTitle = titleContent.trim(); // Store the valid title
             console.log(`[SW] Dynamic title resolved to: "${cachedTitle}"`);
             return cachedTitle;
         } catch (error) {
-            console.error("[SW] Failed to read dynamic title from /data/test/title.txt:", error);
+            console.error("[SW] Failed to read dynamic title from /data/source/title.txt:", error);
             cachedTitle = null; // Reset cache on error
             titleFetchInProgress = null; // Clear the promise lock on error BEFORE throwing
 
@@ -1300,11 +1300,11 @@ if (method === 'GET' && requestedPath.startsWith('/webgal/game/vocal/')) {
     event.respondWith(
       (async () => {
         try {
-          // Note: Uses readFile directly on /data/test/title.txt, NOT getDynamicTitle() cache
+          // Note: Uses readFile directly on /data/source/title.txt, NOT getDynamicTitle() cache
           // This might be intentional or could be changed to use getDynamicTitle() for consistency
-          const titleContent = await readFile('/data/test/title.txt');
+          const titleContent = await readFile('/data/source/title.txt');
            if (typeof titleContent !== 'string') {
-               throw new Error("Title content from /data/test/title.txt is not a string.");
+               throw new Error("Title content from /data/source/title.txt is not a string.");
            }
           let game_key = (x => {let h = 0; for (let i = 0; i < titleContent.trim().length; i++) {let c = titleContent.trim().charCodeAt(i); h = (h << 5) - h + c; h = h & h;} return Math.abs(h).toString(16).padStart(8, '0').slice(0, 8);})(titleContent.trim());
           const configContent = `Game_name:${titleContent.trim()};\nGame_key:${game_key};\nTitle_img:title.png;\nTitle_bgm:background.mp3;\nTextbox_theme:imss;`;
@@ -1312,7 +1312,7 @@ if (method === 'GET' && requestedPath.startsWith('/webgal/game/vocal/')) {
 
         } catch (error) {
            if (error.name === 'FileNotFoundError') {
-               return createErrorResponse(404, 'Configuration Error', 'Title file (/data/test/title.txt) not found for config generation.');
+               return createErrorResponse(404, 'Configuration Error', 'Title file (/data/source/title.txt) not found for config generation.');
            } else if (error.name === 'TitleConfigurationError') { // If using getDynamicTitle()
                return createErrorResponse(500, 'Configuration Error', error.message);
            } else if (error.message && error.message.includes('Database open is blocked')) {

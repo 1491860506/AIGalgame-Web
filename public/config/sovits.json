@@ -1,0 +1,75 @@
+{
+  "number": 7,
+  "emotion_list": [
+    "normal",
+    "happy",
+    "sad",
+    "angry"
+  ],
+  "emotion_feedback": "normal",
+  "required_item": [
+    {
+      "filepath": "音频文件"
+    },
+    {
+      "reference_text": "文本内容"
+    },
+    {
+      "model": "模型名称"
+    }
+  ],
+  "gptprompt": [],
+  "localproxy": true,
+  "judge_repeat_before": "{{model}}",
+  "before_requests": [
+    {
+      "url": "http://127.0.0.1:9880/set_gpt_weights",
+      "requestmethod": "get",
+      "getparams": [
+        {
+          "weights_path": "GPT_weights_v2/{{model}}.ckpt"
+        }
+      ]
+    },
+    {
+      "url": "http://127.0.0.1:9880/set_sovits_weights",
+      "requestmethod": "get",
+      "getparams": [
+        {
+          "weights_path": "SoVITS_weights_v2/{{model}}.pth"
+        }
+      ]
+    }
+  ],
+  "url": "http://127.0.0.1:9880/tts",
+  "requestmethod": "get",
+  "getparams": [
+    {
+      "text": "{{text}}"
+    },
+    {
+      "text_lang": "zh"
+    },
+    {
+      "ref_audio_path": "{{filepath}}"
+    },
+    {
+      "prompt_lang": "zh"
+    },
+    {
+      "prompt_text": "{{reference_text}}"
+    },
+    {
+      "text_split_method": "cut5"
+    },
+    {
+      "batch_size": "1"
+    },
+    {
+      "media_type": "wav"
+    },
+    {
+      "streaming_mode": "false"
+    }
+  ]
+}

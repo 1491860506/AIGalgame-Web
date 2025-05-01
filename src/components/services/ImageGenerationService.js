@@ -1202,7 +1202,7 @@ export async function generateJS(config, imagesDir, prompt, imageName, model) {
     }
 
     const rembg_model_name = processing_config.rembg_model || "isnet-anime";
-    const rembg_model_path = `/rembg-model/${rembg_model_name}.onnx`;
+    const rembg_model_path = `/read/source/rembg-model/${rembg_model_name}.onnx`;
     const rembg_resolution = processing_config.rembg_resolution || 1024;
     const rembg_debug = processing_config.rembg_debug || false;
     const rembg_timeout = (processing_config.rembg_timeout || 60) * 1000; // 60s timeout

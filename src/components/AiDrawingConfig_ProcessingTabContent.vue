@@ -23,12 +23,32 @@
 
       <div class="input-row">
         <label class="input-label">rembg模型:</label>
-        <input
-          type="text"
+        <select
           v-model="rembgModel"
           class="input-field"
-          @focus="clearSelection"
+          @focus="loadRembgModels"
+        >
+          <option v-for="model in rembgModels" :key="model" :value="model">{{ model }}</option>
+        </select>
+      </div>
+      
+      <!-- 添加的模型导入功能 -->
+      <div class="input-row">
+        <label class="input-label">导入模型:</label>
+        <input
+          type="file"
+          accept=".onnx"
+          ref="modelFileInput"
+          class="file-input"
+          @change="handleModelFileChange"
         />
+        <button class="upload-button" @click="uploadModel" :disabled="!modelFile">
+          上传模型
+        </button>
+      </div>
+      
+      <div v-if="uploadStatus" class="upload-status" :class="{'upload-success': uploadSuccess, 'upload-error': !uploadSuccess}">
+        {{ uploadStatus }}
       </div>
 
       <div class="button-row">
@@ -135,6 +155,8 @@
 </template>
 
 <script>
+import { writeFile, listDirectory } from './services/IndexedDBFileSystem.js';
+
 export default {
   name: 'ProcessingTabContent',
   data() {
@@ -142,6 +164,12 @@ export default {
       // rembg设置
       rembgLocation: "http://localhost:7000/api/remove",
       rembgModel: "isnet-anime",
+      rembgModels: ["isnet-anime"], // 默认模型
+      
+      // 模型导入相关
+      modelFile: null,
+      uploadStatus: "",
+      uploadSuccess: false,
 
       // 分辨率调整设置
       characterResolution: false,
@@ -193,8 +221,140 @@ export default {
         if (processingConfig.background_resize) {
           this.backgroundResize = processingConfig.background_resize;
         }
+        
+        // 加载模型列表
+        this.loadRembgModels();
       } catch (error) {
         console.error("加载后处理配置时出错:", error);
+      }
+    },
+    
+    // 加载rembg模型列表
+    async loadRembgModels() {
+      try {
+        const modelDir = "/data/source/rembg-model";
+        const files = await listDirectory(modelDir);
+        
+        // 提取模型名称（去除扩展名）
+        const modelNames = files.filter(file => !file.isFolder && file.name.endsWith('.onnx'))
+          .map(file => file.name.replace('.onnx', ''));
+        
+        // 如果找到模型，则更新列表
+        if (modelNames.length > 0) {
+          this.rembgModels = modelNames;
+        }
+      } catch (error) {
+        // 如果目录不存在，创建它
+        if (error.message && error.message.includes("目录不存在")) {
+          try {
+            // 在IndexedDBFileSystem中创建rembg模型目录
+            await this.ensureRembgModelDir();
+          } catch (dirError) {
+            console.error("创建rembg模型目录时出错:", dirError);
+          }
+        } else {
+          console.error("加载rembg模型列表时出错:", error);
+        }
+      }
+    },
+    
+    // 确保rembg模型目录存在
+    async ensureRembgModelDir() {
+      try {
+        // 创建模型目录的标记文件
+        await writeFile("/data/source/rembg-model/.directory", "Directory for rembg models");
+      } catch (error) {
+        console.error("创建模型目录时出错:", error);
+        throw error;
+      }
+    },
+    
+    // 处理模型文件选择
+    handleModelFileChange(event) {
+      const files = event.target.files;
+      if (files.length > 0) {
+        const file = files[0];
+        // 检查文件是否为.onnx格式
+        if (file.name.toLowerCase().endsWith('.onnx')) {
+          this.modelFile = file;
+          this.uploadStatus = "已选择文件: " + file.name;
+          this.uploadSuccess = true;
+        } else {
+          this.modelFile = null;
+          this.uploadStatus = "错误: 请选择ONNX格式的文件 (.onnx)";
+          this.uploadSuccess = false;
+        }
+      } else {
+        this.modelFile = null;
+        this.uploadStatus = "";
+      }
+    },
+    
+    // 上传模型文件
+    async uploadModel() {
+      if (!this.modelFile) {
+        this.uploadStatus = "错误: 请先选择模型文件";
+        this.uploadSuccess = false;
+        return;
+      }
+      
+      try {
+        // 显示上传状态
+        this.uploadStatus = "正在上传...";
+        this.uploadSuccess = false;
+        
+        // 确保rembg模型目录存在
+        await this.ensureRembgModelDir();
+        
+        // 读取文件内容
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+          try {
+            // 获取文件内容
+            const fileContent = e.target.result;
+            
+            // 构建保存路径（去掉文件扩展名）
+            const fileName = this.modelFile.name;
+            const modelName = fileName.replace(/\.[^/.]+$/, ""); // 移除扩展名
+            const filePath = `/data/source/rembg-model/${fileName}`;
+            
+            // 保存模型文件
+            await writeFile(filePath, fileContent);
+            
+            // 更新状态
+            this.uploadStatus = `模型 "${fileName}" 上传成功`;
+            this.uploadSuccess = true;
+            
+            // 刷新模型列表
+            await this.loadRembgModels();
+            
+            // 如果当前没有选择模型，选择刚上传的模型
+            if (!this.rembgModel || this.rembgModel === "") {
+              this.rembgModel = modelName;
+              this.saveProcessingConfig();
+            }
+            
+            // 清除文件输入
+            this.$refs.modelFileInput.value = '';
+            this.modelFile = null;
+          } catch (error) {
+            console.error("保存模型文件时出错:", error);
+            this.uploadStatus = "上传失败: " + error.message;
+            this.uploadSuccess = false;
+          }
+        };
+        
+        reader.onerror = () => {
+          this.uploadStatus = "读取文件时出错";
+          this.uploadSuccess = false;
+        };
+        
+        // 以二进制格式读取文件
+        reader.readAsArrayBuffer(this.modelFile);
+      } catch (error) {
+        console.error("上传模型时出错:", error);
+        this.uploadStatus = "上传失败: " + error.message;
+        this.uploadSuccess = false;
       }
     },
 
@@ -250,28 +410,6 @@ export default {
         console.error("保存后处理配置时出错:", error);
       }
     },
-
-    // 切换人物分辨率设置 - Note: This method isn't directly used by @change
-    // The @change on the checkbox directly calls saveProcessingConfig.
-    // This method definition can likely be removed unless there's another use case.
-    // toggleCharacterResolutionSettings(triggeredByUser = false) {
-    //   if (this.characterResolution && triggeredByUser) {
-    //     // 设置默认值
-    //     if (!this.characterWidth) this.characterWidth = 1;
-    //     if (!this.characterHeight) this.characterHeight = 1;
-    //     if (!this.characterResize) this.characterResize = "裁剪";
-    //     this.saveProcessingConfig();
-    //   }
-    // },
-
-    // 切换背景分辨率设置 - Similar to the above, not used by @change
-    // toggleBackgroundResolutionSettings(triggeredByUser = false) {
-    //   if (this.backgroundResolution && triggeredByUser) {
-    //     // 设置默认值
-    //     if (!this.backgroundResize) this.backgroundResize = "裁剪";
-    //     this.saveProcessingConfig();
-    //   }
-    // },
 
     validateAndSave(type) {
       const minValue = 1;
@@ -381,10 +519,10 @@ export default {
   color: var(--text-primary); /* Ensure text color adapts */
 }
 
- .input-field:focus {
-   outline: 2px solid var(--primary-color); /* Use variable */
-   outline-offset: -1px;
- }
+.input-field:focus {
+  outline: 2px solid var(--primary-color); /* Use variable */
+  outline-offset: -1px;
+}
 
 .button-row {
   display: flex;
@@ -405,8 +543,52 @@ export default {
   transition: background-color 0.2s;
 }
 
+/* 新增上传按钮样式 */
+.upload-button {
+  padding: 6px 12px;
+  margin-left: 10px;
+  background-color: var(--primary-color);
+  border: none;
+  border-radius: 4px;
+  color: var(--active-text);
+  cursor: pointer;
+  font-weight: bold;
+  transition: background-color 0.2s;
+}
+
+.upload-button:disabled {
+  background-color: var(--border-color);
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.file-input {
+  flex: 1;
+  padding: 4px;
+  color: var(--text-primary);
+}
+
+.upload-status {
+  margin-top: 5px;
+  padding: 5px;
+  border-radius: 4px;
+  font-size: 0.9rem;
+}
+
+.upload-success {
+  background-color: rgba(40, 167, 69, 0.1);
+  color: var(--success-color);
+  border: 1px solid var(--success-color);
+}
+
+.upload-error {
+  background-color: rgba(220, 53, 69, 0.1);
+  color: var(--error-color, #dc3545);
+  border: 1px solid var(--error-color, #dc3545);
+}
+
 /* Hover color might need adjustment in dark mode, but using a darker shade of the base color is common */
-.save-button:hover {
+.save-button:hover, .upload-button:hover {
   /* background-color: #218838; */
    /* A slightly darker green for hover, need to find a value that works in dark mode too */
    /* Using a fixed color for hover might be better than trying to calculate a shade of a variable */

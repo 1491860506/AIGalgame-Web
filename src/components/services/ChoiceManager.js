@@ -1,9 +1,6 @@
 /**
  * 选项管理服务
  * 处理AI生成的选项，保存和检索选项数据
- * 
- * Current Date and Time (UTC): 2025-04-19 04:20:53
- * Current User's Login: djfaaa
  */
 
 import { gpt, gptDestroy } from './AiModelService';

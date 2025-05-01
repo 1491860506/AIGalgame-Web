@@ -1,4 +1,5 @@
 <template>
+  <div>
   <div class="about-container">
     <!-- Title Section -->
     <div class="title-section">
@@ -36,15 +37,28 @@
           帮助与文档
         </h2>
         <div class="card-content">
+          <!-- 原“查看在线文档”改为“查看项目文档” -->
           <div class="action-row">
             <div class="action-label">
               <span>用户手册</span>
             </div>
             <button class="btn btn-primary" @click="openUrl('https://aigal.qqframe.cn')">
               <font-awesome-icon :icon="['fas', 'file-alt']" class="btn-icon-fa" />
-              查看在线文档
+              查看项目文档
             </button>
           </div>
+
+          <!-- 新增“查看配置说明” -->
+          <div class="action-row">
+             <div class="action-label">
+              <span>配置说明</span>
+            </div>
+            <button class="btn btn-primary" @click="openUrl('/docs')">
+              <font-awesome-icon :icon="['fas', 'cogs']" class="btn-icon-fa" /> <!-- 使用齿轮图标或您喜欢的其他图标 -->
+              查看配置说明
+            </button>
+          </div>
+
         </div>
       </div>
 
@@ -203,11 +217,14 @@
       </div>
     </div>
   </div>
+</div>
 </template>
+
 
 <script>
 export default {
   name: 'About',
+  emits: ['showMessage'],
   data() {
     return {
       currentVersion: '1.0.5',
@@ -225,7 +242,9 @@ export default {
   methods: {
     openUrl(url) {
       // Open URL in a new tab
-      window.open(url, '_blank');
+      // Added window.location.origin for local paths like /docs
+      const targetUrl = url.startsWith('/') ? window.location.origin + url : url;
+      window.open(targetUrl, '_blank');
     },
     
     // 检测当前操作系统
@@ -364,33 +383,24 @@ export default {
     
     // 版本号比较
     compareVersions(v1, v2) {
-      // 移除前缀 't'（如果有）
-      v1 = v1.replace('t', '');
-      v2 = v2.replace('t', '');
+      // 移除前缀 't' (if any)
+      v1 = v1.replace(/^t/, '');
+      v2 = v2.replace(/^t/, '');
       
-      const parts1 = v1.split('.');
-      const parts2 = v2.split('.');
+      const parts1 = v1.split('.').map(Number);
+      const parts2 = v2.split('.').map(Number);
       
-      // 比较每一部分
-      for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
-        // 如果某个版本没有该部分，则用0代替
-        const n1 = i < parts1.length ? parseInt(parts1[i], 10) : 0;
-        const n2 = i < parts2.length ? parseInt(parts2[i], 10) : 0;
+      const maxLength = Math.max(parts1.length, parts2.length);
+      
+      for (let i = 0; i < maxLength; i++) {
+        const p1 = parts1[i] || 0; // Treat missing parts as 0
+        const p2 = parts2[i] || 0;
         
-        if (n1 > n2) return 1;  // v1 更新
-        if (n1 < n2) return -1; // v2 更新
+        if (p1 > p2) return 1;
+        if (p1 < p2) return -1;
       }
       
-      // 特殊情况：版本号前面部分相同，但一个有第四部分且不为0
-      if (parts1.length === 4 && parts2.length < 4 && parseInt(parts1[3], 10) !== 0) {
-        return 1; // v1 更新
-      }
-      
-      if (parts2.length === 4 && parts1.length < 4 && parseInt(parts2[3], 10) !== 0) {
-        return -1; // v2 更新
-      }
-      
-      return 0; // 版本相同
+      return 0; // Versions are equal
     }
   }
 };
@@ -436,8 +446,8 @@ export default {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 .app-logo svg {
-    color: var(--primary-color); 
-    width: 0.8em; 
+    color: var(--primary-color);
+    width: 0.8em;
     height: 0.8em;
 }
 
@@ -518,12 +528,16 @@ export default {
 
 .card-content {
   padding: 1.5rem;
+  display: flex; /* Use flexbox for the content to stack rows */
+  flex-direction: column; /* Stack rows vertically */
+  gap: 1rem; /* Add space between action rows */
 }
 
 .action-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  /* margin-bottom removed, using gap in card-content instead */
 }
 
 .action-label {
@@ -839,7 +853,7 @@ export default {
     margin-left: 3.2rem;
     font-size: 0.85rem;
   }
-  
+
   .divider {
     margin: 1rem 0;
   }
@@ -853,20 +867,21 @@ export default {
     gap: 1rem;
     margin-bottom: 1.5rem;
   }
-  
+
   .card-title {
     padding: 0.8rem 1rem;
     font-size: 1.1rem;
   }
-  
+
   .card-icon-fa {
     font-size: 1.1rem;
   }
-  
+
   .card-content {
     padding: 1rem;
+    gap: 0.8rem; /* Adjust gap for smaller screens */
   }
-  
+
   .description {
     font-size: 1rem;
     margin-bottom: 1rem;
@@ -875,20 +890,20 @@ export default {
   .action-row {
     flex-direction: column;
     align-items: stretch;
-    gap: 0.8rem;
+    gap: 0.8rem; /* Gap between label and button when stacked */
   }
-  
+
   .action-label {
     font-size: 1rem;
   }
-  
+
   .btn {
     width: 100%;
     justify-content: center;
     padding: 0.6rem 1rem;
     font-size: 0.9rem;
   }
-  
+
   .btn-icon-fa {
     font-size: 1em;
   }
@@ -898,15 +913,15 @@ export default {
     gap: 0.8rem;
     margin-bottom: 1rem;
   }
-  
+
   .feature-item {
     padding: 0.8rem;
   }
-  
+
   .feature-icon-fa {
     font-size: 1.5rem;
   }
-  
+
   .feature-text {
     font-size: 0.9rem;
   }
@@ -923,30 +938,30 @@ export default {
     gap: 0.8rem;
     margin-top: 0.8rem;
   }
-  
+
   .btn-link {
     padding: 0.4rem 0.6rem;
     font-size: 0.9rem;
   }
-  
+
   /* Modal adjustments for small screens */
   .modal-content {
     width: 95%;
     max-height: 95vh;
   }
-  
+
   .modal-header {
     padding: 0.8rem 1rem;
   }
-  
+
   .modal-body {
     padding: 1rem;
   }
-  
+
   .version-option {
     padding: 0.8rem;
   }
-  
+
   .version-item {
     padding: 0.8rem;
   }

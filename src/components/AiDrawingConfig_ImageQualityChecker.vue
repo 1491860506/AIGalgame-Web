@@ -2,10 +2,6 @@
   <div class="image-quality-checker">
     <header>
       <h1>AI图像质量检查 & 处理工具</h1>
-      <div class="user-info">
-        <div class="timestamp">{{ currentTimestamp }}</div>
-        <div class="username">{{ username }}</div>
-      </div>
     </header>
     
     <div class="uploader-section">
@@ -110,9 +106,6 @@ export default {
   name: 'ImageQualityChecker',
   data() {
     return {
-      currentTimestamp: '2025-04-19 06:40:58',
-      username: 'djfaaa',
-      
       imageFile: null,
       previewUrl: null,
       processedImageUrl: null,
@@ -327,10 +320,6 @@ h1 {
   color: var(--text-secondary, #64748b);
 }
 
-.username {
-  font-weight: 600;
-  margin-top: 3px;
-}
 
 .uploader-section {
   margin-bottom: 30px;

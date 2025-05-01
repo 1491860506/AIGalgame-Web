@@ -89,7 +89,7 @@ export function useApiEndpoints() {
             const config = loadConfig();
             const tasks = [];
             // updateLog(`Starting joinable tasks for story_id: ${story_id}, type: ${type}`);
-            gettoken('music'); // Assuming token needed before music tasks
+            //gettoken('music'); // Assuming token needed before music tasks
 
             if (type === 'continue') {
                 // Tasks to join for story_continue

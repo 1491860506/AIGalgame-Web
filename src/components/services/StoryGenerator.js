@@ -1,9 +1,7 @@
 /**
  * 故事生成服务
  * 使用localStorage配置和IndexedDB文件存储
- * 
- * Current Date and Time (UTC): 2025-04-19 04:01:06
- * Current User's Login: aaaaaa
+
  */
 
 import { gpt, gptDestroy } from './AiModelService';

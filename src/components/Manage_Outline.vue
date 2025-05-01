@@ -4,7 +4,7 @@
       <!-- 大纲管理面板 -->
       <div class="outlines-panel">
         <div class="panel-header">
-          <h2>大纲管理</h2>
+          <h2>大纲列表</h2>
           <button class="refresh-btn icon-btn" @click="loadOutlineTitles" title="刷新列表">
             <!-- Replace emoji -->
             <!-- 🔄 -->
@@ -168,7 +168,12 @@
                     <div class="character-properties">
                       <div v-for="(value, key) in character" :key="key" class="character-property" v-if="key !== 'name' && key !== 'gender' && key !== 'age'">
                         <div class="property-label">{{ getPropertyLabel(key) }}</div>
-                        <div class="property-value">{{ value }}</div>
+                        <div class="property-value">
+                          <!-- 如果值是对象 (且不是null或数组)，显示为格式化的JSON代码块 -->
+                          <pre v-if="typeof value === 'object' && value !== null && !Array.isArray(value)"><code>{{ JSON.stringify(value, null, 2) }}</code></pre>
+                          <!-- 否则 (字符串, 数字, boolean等)，显示为普通文本 -->
+                          <p v-else>{{ value }}</p>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -601,6 +606,7 @@ export default {
       isSaving: false,
 
       // Character properties management (UNCHANGED logic)
+      key:'',
       newPropertyKey: '',
       standardProperties: ['name', 'gender', 'age', 'appearance', 'personality', 'relations', 'others'], // List of standard keys for display order/handling
       propertyLabels: { // Mapping for standard keys
@@ -648,6 +654,10 @@ export default {
         if (indexToRemove !== -1) {
           this.outlineTitles.splice(indexToRemove, 1);
         }
+        indexToRemove = this.outlineTitles.indexOf('source');
+          if (indexToRemove !== -1) {
+            this.outlineTitles.splice(indexToRemove, 1);
+          }
       } catch (error) {
         console.error('加载大纲标题失败:', error);
         this.showNotification('加载大纲列表失败', 'error');
@@ -747,56 +757,109 @@ export default {
     /**
      * Convert any character data format to standard character array - UNCHANGED
      */
-    convertToCharacterArray(characterData) {
-      // Ensure characterData is not null/undefined before checking type
-      if (!characterData) {
-          return [this.createEmptyCharacter()]; // Default to one empty character
-      }
+     convertToCharacterArray(characterData) {
+        // Ensure characterData is not null/undefined before checking type
+  if (!characterData) {
+      return [this.createEmptyCharacter()]; // Default to one empty character
+  }
 
-      if (Array.isArray(characterData)) {
-        // If it's already an array, ensure each item has standard properties (shallow copy)
-        return characterData.map((char, index) => {
-          // Simple merge for basic properties, keeps others
-          return {
-            name: char.name || `角色 ${index + 1}`,
-            gender: char.gender || '',
-            // Ensure age is number or null
-            age: (char.age === undefined || char.age === null || isNaN(char.age)) ? null : Number(char.age),
-            ...char // Spread existing properties
-          };
-        });
-      } else if (typeof characterData === 'object' && characterData !== null) {
-        // If it's an object, convert entries to array items
-        return Object.entries(characterData).map(([key, value]) => {
-          if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-            // If value is an object, merge it (shallow copy)
-            return {
-              name: key,
-              ...value
-            };
-          } else {
-            // If value is string, number, array, etc., put it under 'description'
-             // Preserve original value type if possible? Original put everything else as string
-             // Let's keep original behavior of potentially losing structure here
-            return {
-              name: key,
-              description: String(value) // Convert to string for simplicity in textareas
-            };
-          }
-        });
-      } else if (typeof characterData === 'string') {
-        // If it's a string, create a single character item with description
-        return [
-          {
-            name: '角色', // Default name
-            description: characterData
-          }
-        ];
+  if (Array.isArray(characterData)) {
+    // If it's already an array, ensure each item has standard properties (shallow copy)
+    return characterData.map((char, index) => {
+      const editedChar = {
+        name: char.name || `角色 ${index + 1}`,
+        gender: char.gender || '',
+        // Ensure age is number or null
+        age: (char.age === undefined || char.age === null || isNaN(char.age)) ? null : Number(char.age),
+        // Copy other properties and stringify objects
+        ...Object.fromEntries(
+          Object.entries(char || {}).map(([key, value]) => {
+            // Exclude standard properties handled above
+            if (['name', 'gender', 'age'].includes(key)) {
+              return [key, value]; // Keep original for standard ones for potential processing later (though handled above)
+            }
+            // If value is an object (and not null/array), stringify it for the textarea
+            if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+              return [key, JSON.stringify(value, null, 2)];
+            }
+            // Otherwise, keep the original value (or convert to string if needed, but original implies keeping non-object types?)
+            // Let's keep it as is for non-objects, assuming textarea can handle primitives
+             return [key, value]; // Keep value as is for non-objects
+          })
+        )
+      };
+
+       // Simple cleaning: remove keys added twice by spread and explicit handling
+       // This part is a bit tricky with spread and then manual mapping.
+       // A simpler approach is to build the object explicitly.
+       const finalEditedChar = {};
+       finalEditedChar.name = editedChar.name;
+       finalEditedChar.gender = editedChar.gender;
+       finalEditedChar.age = editedChar.age;
+
+       // Add other properties, applying stringify if needed
+       for (const key in char) {
+           if (char.hasOwnProperty(key) && !['name', 'gender', 'age'].includes(key)) {
+                const value = char[key];
+                if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+                    finalEditedChar[key] = JSON.stringify(value, null, 2); // Stringify object
+                } else {
+                    finalEditedChar[key] = value; // Keep other types as is
+                }
+           }
+       }
+
+
+      return finalEditedChar; // Return the processed character object for editing
+    });
+  } else if (typeof characterData === 'object' && characterData !== null) {
+    // If it's an object (like old format { '角色名': { properties } }), convert entries to array items
+    return Object.entries(characterData).map(([key, value]) => {
+      const editedChar = {
+        name: key, // Use key as name
+      };
+
+      if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+        // If value is an object, iterate its properties
+        for (const propKey in value) {
+           if (value.hasOwnProperty(propKey)) {
+                const propValue = value[propKey];
+                 // Check if the propValue is an object (and not null/array), stringify it
+                if (typeof propValue === 'object' && propValue !== null && !Array.isArray(propValue)) {
+                     editedChar[propKey] = JSON.stringify(propValue, null, 2);
+                } else {
+                     editedChar[propKey] = propValue; // Keep other types as is
+                }
+           }
+        }
+         // Ensure standard fields exist even if not in original object
+         if (editedChar.gender === undefined) editedChar.gender = '';
+         if (editedChar.age === undefined) editedChar.age = null;
+
       } else {
-        // Default to creating one empty character for any other unexpected format
-        return [this.createEmptyCharacter()];
+        // If value is string, number, array, etc., put it under 'description' property
+        // Stringify if it's an object/array for simplicity in textareas
+         editedChar.description = (typeof value === 'object' && value !== null) ? JSON.stringify(value, null, 2) : String(value);
+         editedChar.gender = ''; // Default empty
+         editedChar.age = null; // Default null
       }
-    },
+      return editedChar;
+    });
+  } else if (typeof characterData === 'string') {
+    // If it's a string, create a single character item with description
+    return [
+      {
+        name: '角色', // Default name
+        description: characterData,
+        gender: '',
+        age: null,
+      }
+    ];
+  } else {
+    // Default to creating one empty character for any other unexpected format
+    return [this.createEmptyCharacter()];
+  }
+  },
 
     /**
      * Create an empty character object - UNCHANGED
@@ -973,70 +1036,89 @@ export default {
      * Save edited outline - UNCHANGED logic for structure creation and saving
      * Only potential change is how character array is processed before saving.
      */
-    async saveEditedOutline() {
-      this.isSaving = true; // Set loading state - UNCHANGED
-      this.editError = ''; // Clear previous error
+     async saveEditedOutline() {
+        this.isSaving = true; // Set loading state - UNCHANGED
+        this.editError = ''; // Clear previous error
 
-       // Basic validation for title
-       if (!this.editOutlineContent.title || this.editOutlineContent.title.trim() === '') {
-            this.showNotification('大纲标题不能为空', 'error');
-            this.isSaving = false;
-            return;
-       }
-
-
-      try {
-        const outlineObj = { title: this.editOutlineContent.title.trim() }; // Create structure - UNCHANGED
-
-        // Process outline content based on format - UNCHANGED logic
-        if (this.editOutlineFormat.outline === 'json') {
-          const outlineJsonData = {};
-          for (const item of this.editOutlineContent.outlineJson) {
-            if (item.key.trim()) { // Only add if key is not empty
-              try {
-                  // Attempt to parse value as JSON, fallback to string
-                  outlineJsonData[item.key.trim()] = JSON.parse(item.value);
-              } catch (e) {
-                  outlineJsonData[item.key.trim()] = item.value; // Keep as string if JSON parse fails
-              }
-            }
-          }
-          outlineObj.outline = outlineJsonData;
-        } else {
-          outlineObj.outline = this.editOutlineContent.outlineText;
+        // Basic validation for title
+        if (!this.editOutlineContent.title || this.editOutlineContent.title.trim() === '') {
+              this.showNotification('大纲标题不能为空', 'error');
+              this.isSaving = false;
+              return;
         }
 
-        // Process character data - Convert array back to a suitable structure for saving
-        // Original logic saved it as an array of objects. Let's stick to that.
-        const characterArrayToSave = this.editOutlineContent.characters.map(char => {
-          // Create a clean object, only including properties with values
-          const cleanChar = {};
-          // Iterate over all properties (including potential custom ones)
-          for (const key in char) {
-              if (char.hasOwnProperty(key)) {
-                   const value = char[key];
-                   // Handle age specifically: ensure it's number or exclude if null/empty/NaN
-                   if (key === 'age') {
-                       if (value !== null && value !== '' && !isNaN(value)) {
-                           cleanChar[key] = Number(value);
-                       }
-                   }
-                   // Handle other properties: include if value is not null, empty string, or undefined
-                   else if (value !== null && value !== '' && value !== undefined) {
-                        cleanChar[key] = value;
-                   }
+        try {
+          const outlineObj = { title: this.editOutlineContent.title.trim() }; // Create structure - UNCHANGED
+
+          // Process outline content based on format - UNCHANGED logic
+          if (this.editOutlineFormat.outline === 'json') {
+            const outlineJsonData = {};
+            for (const item of this.editOutlineContent.outlineJson) {
+              if (item.key.trim()) { // Only add if key is not empty
+                try {
+                    // Attempt to parse value as JSON, fallback to string
+                    outlineJsonData[item.key.trim()] = JSON.parse(item.value);
+                } catch (e) {
+                    outlineJsonData[item.key.trim()] = item.value; // Keep as string if JSON parse fails
+                }
               }
+            }
+            outlineObj.outline = outlineJsonData;
+          } else {
+            outlineObj.outline = this.editOutlineContent.outlineText;
           }
-           return cleanChar;
-        }).filter(char => Object.keys(char).length > 0); // Filter out entirely empty character objects
 
-        // Call the imported save function - UNCHANGED
-        // The saveOutlineContent function is expected to handle how outlineObj and characterArray are structured in the saved file.
-        // Based on the original structure { outline: {...}, character: [...] }, we pass the outlineObj and the processed character array separately.
-        // Assuming saveOutlineContent combines them into the final saved structure.
-        const result = await saveOutlineContent(this.currentTitle, outlineObj, characterArrayToSave); // Call UNCHANGED function
+          // Process character data - Convert array back to a suitable structure for saving
+          // Add JSON parsing logic for character property values
+          const characterArrayToSave = this.editOutlineContent.characters.map(editedChar => {
+              const cleanChar = {};
 
-        if (result) { // Check result - UNCHANGED
+              // Iterate over all properties (including potential custom ones) from the edited character
+              for (const key in editedChar) {
+                  if (editedChar.hasOwnProperty(key)) {
+                      const stringValue = editedChar[key]; // This is the string from the textarea (or original value for standard fields)
+
+                      // Handle standard properties explicitly
+                      if (key === 'name') {
+                          if (stringValue !== null && stringValue !== undefined && stringValue !== '') {
+                              cleanChar[key] = stringValue.trim(); // Trim name
+                          }
+                      } else if (key === 'gender') {
+                          if (stringValue !== null && stringValue !== undefined && stringValue !== '') {
+                              cleanChar[key] = stringValue.trim(); // Trim gender
+                          }
+                      } else if (key === 'age') {
+                            // Handle age specifically: ensure it's number or exclude if null/empty/NaN
+                            const age = Number(stringValue); // Attempt conversion
+                            if (!isNaN(age) && age !== null && stringValue !== '' && stringValue !== undefined) { // Check if conversion was valid AND original input wasn't just empty/null/undefined
+                                cleanChar[key] = age;
+                            }
+                      }
+                      // Handle other properties (custom ones) - attempt JSON parsing
+                      else if (stringValue !== null && stringValue !== undefined && stringValue !== '') { // Only process if not empty
+                            try {
+                                const parsedValue = JSON.parse(stringValue);
+                                // Check if the parsed result is a non-null, non-array object
+                                if (typeof parsedValue === 'object' && parsedValue !== null && !Array.isArray(parsedValue)) {
+                                    cleanChar[key] = parsedValue; // Save as object if valid JSON object
+                                } else {
+                                    cleanChar[key] = stringValue; // Save as string if not a JSON object (or if parsing resulted in primitive/array)
+                                }
+                            } catch (e) {
+                                // Parsing failed, save as string
+                                cleanChar[key] = stringValue;
+                            }
+                      }
+                  }
+              }
+              return cleanChar;
+          }).filter(char => Object.keys(char).length > 0); // Filter out entirely empty character objects
+
+
+          // Call the imported save function - UNCHANGED
+          // Pass outlineObj and characterArrayToSave
+          const result = await saveOutlineContent(this.currentTitle, outlineObj, characterArrayToSave); // Call UNCHANGED function
+          if (result) { // Check result - UNCHANGED
           this.showNotification('大纲保存成功', 'success');
           this.showEditModal = false; // Close modal - UNCHANGED
           await this.loadOutlineTitles(); // Reload list - UNCHANGED
@@ -1046,8 +1128,6 @@ export default {
           } else {
              this.selectedOutline = this.currentTitle; // Stay selected
           }
-        } else {
-          this.showNotification('大纲保存失败', 'error'); // Show error - UNCHANGED
         }
       } catch (error) {
         console.error('保存大纲失败:', error);
@@ -1148,27 +1228,43 @@ export default {
 
         textContent += `\n\n==== 角色设定 ====\n\n`;
         const characters = this.currentOutlineContent.character; // Get character data - UNCHANGED
-        if (Array.isArray(characters)) { // If character is array - UNCHANGED logic
+        if (Array.isArray(characters)) {
           characters.forEach((char, index) => {
-            textContent += `【${char.name || `角色 ${index + 1}`}】\n`; // Use name or default - UNCHANGED
-            if (char.gender) textContent += `性别: ${char.gender}\n`; // Include if exists - UNCHANGED
+            textContent += `【${char.name || `角色 ${index + 1}`}】\n`;
+            if (char.gender) textContent += `性别: ${char.gender}\n`;
             // Check age more carefully for null/undefined/NaN
             if (char.age !== undefined && char.age !== null && !isNaN(char.age)) textContent += `年龄: ${char.age}岁\n`;
 
-            // Add other properties - UNCHANGED logic
-            Object.entries(char || {}).forEach(([key, value]) => { // Iterate char properties, handle null/undefined char
-              if (!['name', 'gender', 'age'].includes(key) && value !== undefined && value !== null && value !== '') { // Check value exists and is not empty
-                textContent += `${this.getPropertyLabel(key)}: ${value}\n`; // Use label and value - UNCHANGED
+            // Add other properties - MODIFIED logic for JSON
+            Object.entries(char || {}).forEach(([key, value]) => {
+              if (!['name', 'gender', 'age'].includes(key) && value !== undefined && value !== null && value !== '') {
+                let displayValue = '';
+                // If value is an object (and not null/array), stringify it nicely for text export
+                if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+                    displayValue = `(JSON):\n${JSON.stringify(value, null, 2)}`; // Add (JSON) tag for clarity
+                } else {
+                    // Otherwise, use the string representation (handle newlines maybe?)
+                    displayValue = String(value); // Simple string conversion
+                }
+                textContent += `${this.getPropertyLabel(key)}: ${displayValue}\n`;
               }
             });
-            textContent += '\n'; // Add newline after each character - UNCHANGED
+            textContent += '\n';
           });
-        } else if (typeof characters === 'string') { // If character is string - UNCHANGED
+        } else if (typeof characters === 'string') {
           textContent += characters;
-        } else if (typeof characters === 'object' && characters !== null) { // If character is object - UNCHANGED
+        } else if (typeof characters === 'object' && characters !== null) {
+          // Handle object format characters (old style) - Ensure values are handled
           for (const [name, description] of Object.entries(characters)) {
-            const descText = typeof description === 'object' ? JSON.stringify(description, null, 2) : String(description); // Stringify object descriptions, convert others to string
-            textContent += `${name}:\n${descText}\n\n`;
+              let descText = '';
+              // If value is an object (and not null/array), stringify it
+              if (typeof description === 'object' && description !== null && !Array.isArray(description)) {
+                  descText = `:\n${JSON.stringify(description, null, 2)}`;
+              } else {
+                    // Otherwise, convert to string
+                    descText = String(description);
+              }
+              textContent += `${name}:\n${descText}\n\n`;
           }
         }
 
@@ -1207,31 +1303,46 @@ export default {
 
         mdContent += `\n## 角色设定\n\n`;
         const characters = this.currentOutlineContent.character; // Get character data - UNCHANGED
-        if (Array.isArray(characters)) { // If character is array - UNCHANGED logic
+        if (Array.isArray(characters)) {
           characters.forEach((char, index) => {
-            mdContent += `### ${char.name || `角色 ${index + 1}`}\n\n`; // Use name or default - UNCHANGED
+            mdContent += `### ${char.name || `角色 ${index + 1}`}\n\n`;
 
             // Add basic info - UNCHANGED logic
             let basicInfo = '';
             if (char.gender) basicInfo += `- **性别**: ${char.gender}\n`;
             // Check age more carefully for null/undefined/NaN
             if (char.age !== undefined && char.age !== null && !isNaN(char.age)) basicInfo += `- **年龄**: ${char.age}岁\n`;
-            if (basicInfo) mdContent += `${basicInfo}\n`; // Add basic info block if not empty
+            if (basicInfo) mdContent += `${basicInfo}\n`;
 
-            // Add other properties - UNCHANGED logic
-            Object.entries(char || {}).forEach(([key, value]) => { // Iterate char properties, handle null/undefined char
-               // Check value exists, is not empty, and key is not basic
+            // Add other properties - MODIFIED logic for JSON
+            Object.entries(char || {}).forEach(([key, value]) => {
               if (!['name', 'gender', 'age'].includes(key) && value !== undefined && value !== null && value !== '') {
-                mdContent += `#### ${this.getPropertyLabel(key)}\n\n${value}\n\n`; // Use label and value - UNCHANGED
+                let displayValue = '';
+                // If value is an object (and not null/array), format as a Markdown JSON code block
+                if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+                    displayValue = `\`\`\`json\n${JSON.stringify(value, null, 2)}\n\`\`\``;
+                } else {
+                    // Otherwise, use the string representation, convert newlines to double newlines for paragraph breaks
+                    displayValue = String(value).replace(/\n/g, '\n\n'); // Markdown paragraphs
+                }
+                mdContent += `#### ${this.getPropertyLabel(key)}\n\n${displayValue}\n\n`;
               }
             });
           });
-        } else if (typeof characters === 'string') { // If character is string - UNCHANGED
+        } else if (typeof characters === 'string') {
           mdContent += characters.replace(/\n/g, '\n\n');
-        } else if (typeof characters === 'object' && characters !== null) { // If character is object - UNCHANGED
+        } else if (typeof characters === 'object' && characters !== null) {
+          // Handle object format characters (old style) - Ensure values are handled
           for (const [name, description] of Object.entries(characters)) {
-            const descText = typeof description === 'object' ? `\`\`\`json\n${JSON.stringify(description, null, 2)}\n\`\`\`` : String(description).replace(/\n/g, '\n  '); // Stringify objects, convert others to string and indent newlines
-            mdContent += `### ${name}\n\n${descText}\n\n`;
+              let descText = '';
+              // If value is an object (and not null/array), format as a Markdown JSON code block
+              if (typeof description === 'object' && description !== null && !Array.isArray(description)) {
+                  descText = `\`\`\`json\n${JSON.stringify(description, null, 2)}\n\`\`\``;
+              } else {
+                    // Otherwise, convert to string, handle newlines
+                    descText = String(description).replace(/\n/g, '\n\n');
+              }
+              mdContent += `### ${name}\n\n${descText}\n\n`;
           }
         }
 
@@ -1325,8 +1436,8 @@ export default {
 .outline-generator {
   font-family: 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   max-width: 1200px;
-  margin: 20px auto; /* Added margin */
-  padding: 20px;
+  margin: 0px; /* Added margin */
+  padding: 0px;
   color: var(--text-primary, #1e293b); /* Use variable */
   background-color: var(--content-bg, #f9fafb); /* Use variable */
   border-radius: 12px;
@@ -1495,7 +1606,6 @@ export default {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  max-height: calc(100vh - 260px); /* Adjusted calculation (header + panel padding + some buffer) */
   overflow-y: auto;
   padding-right: 5px;
 }
@@ -2697,7 +2807,7 @@ body.dark-theme .section-content pre {
 @media (max-width: 480px) {
      .outline-generator {
          padding: 10px; /* Further reduce padding */
-         margin: 10px auto; /* Further reduce margin */
+         margin: 0px; /* Further reduce margin */
      }
     .panel-header {
         padding: 12px; /* Further reduce padding */

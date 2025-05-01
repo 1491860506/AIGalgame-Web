@@ -1,9 +1,7 @@
 /**
  * IndexedDB 文件系统模拟
  * 用于替代传统文件系统，支持文件和文件夹的操作
- * 
- * Current Date and Time (UTC): 2025-04-20 14:20:34
- * Current User's Login: djfaaa
+
  */
 
 // 数据库常量

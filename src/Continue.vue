@@ -16,11 +16,11 @@ import { useApiEndpoints } from './components/services/useApiEndpoints'; // Adju
 
 // --- Reactive State ---
 const status = ref('Initializing...'); // Overall status for UI display
-const currentTitle = ref(null);       // Loaded from /data/test/title.txt
+const currentTitle = ref(null);       // Loaded from /data/source/title.txt
 const errorMessage = ref('');         // Stores the last error message
 const isProcessing = ref(false);      // Lock to prevent concurrent tasks
 const monitorInterval = ref(null);    // Holds the interval ID for cleanup
-const titleFilePath = '/data/test/title.txt';
+const titleFilePath = '/data/source/title.txt';
 const POLLING_INTERVAL = 1000; // Check every 1 second
 
 // --- API Endpoints ---

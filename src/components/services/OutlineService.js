@@ -1,9 +1,7 @@
 /**
  * 大纲生成服务
  * 使用IndexedDBFileSystem模块实现文件操作
- * 
- * Current Date and Time (UTC): 2025-04-17 13:11:45
- * Current User's Login: djfaaa
+
  */
 
 import { gpt, gptDestroy } from './AiModelService';

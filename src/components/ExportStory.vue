@@ -970,10 +970,6 @@ h1 {
   color: var(--text-secondary, #64748b);
 }
 
-.username {
-  font-weight: 600;
-  margin-top: 3px;
-}
 
 main {
   min-height: calc(84vh - 150px);

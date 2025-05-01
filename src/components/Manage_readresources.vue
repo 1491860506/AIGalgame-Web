@@ -675,11 +675,9 @@ export default {
       this.isGenerating[`audio-${storyId}`] = true;
       
       try {
-        // 获取该故事片段下所有语音（包括缺失的）
-        const existingItems = this.classifiedAudio.byStory[storyId] || [];
-        const missingItems = this.missingAudioByStory[storyId] || [];
         
         try {
+          this.showNotification(`开始生成，注意不要重复点击按钮`, 'warning');
           await generateVoice(storyId);
           console.log(`已重新生成语音: 故事ID ${storyId}`);
         } catch (err) {

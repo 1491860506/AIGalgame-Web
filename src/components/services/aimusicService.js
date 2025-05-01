@@ -673,12 +673,12 @@ Object.defineProperty(String.prototype, 'isDigit', {
             const remainStr = await getremain(platformkey, sunoid);
             const remain = parseFloat(remainStr);
             
-            if (remain < 0.58) {
-              console.log(`${i+1}/${totalCount} Invalid: remain=${remain.toFixed(4)} < 0.58`);
+            if (remain < 0.42) {
+              console.log(`${i+1}/${totalCount} Invalid: remain=${remain.toFixed(4)} < 0.42`);
               invalidCount++;
             } else {
               validTokens.push(token);
-              console.log(`${i+1}/${totalCount} Valid: remain=${remain.toFixed(4)} >= 0.58`);
+              console.log(`${i+1}/${totalCount} Valid: remain=${remain.toFixed(4)} >= 0.42`);
             }
           } catch (error) {
             console.error(`${i+1}/${totalCount} Error: Validation failed:`, error);
@@ -762,7 +762,7 @@ Object.defineProperty(String.prototype, 'isDigit', {
             
             const remain = parseFloat(await getremain(platformkey, sunoid));
             
-            if (remain < 0.58) {
+            if (remain < 0.42) {
               // Remove invalid token
               availableTokens.splice(randomIndex, 1);
               
@@ -837,7 +837,7 @@ function loadConfig() {
     if (configString) {
         try {
             const config = JSON.parse(configString);
-            console.log("Config loaded from localStorage:", config);
+            //console.log("Config loaded from localStorage:", config);
             // 确保结构存在，提供默认值
             config["剧情"] = config["剧情"] || {};
             config["AI音乐"] = config["AI音乐"] || {};
