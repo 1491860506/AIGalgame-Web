@@ -533,18 +533,9 @@ function determineContentTypeAndBody(fileContent, filePath) {
         }
     }
     if (fileContent instanceof Blob) {
-      // console.log(`[SW] Content is Blob. Type: ${fileContent.type}`);
-      // Convert Blob to ArrayBuffer before returning
-       return new Promise((resolve, reject) => {
-           const reader = new FileReader();
-            reader.onload = () => {
-                resolve({ contentType: fileContent.type || getMimeTypeFromExtension(filePath) || 'application/octet-stream', body: reader.result });
-           };
-           reader.onerror = reject;
-           reader.readAsArrayBuffer(fileContent);
-       });
-  }
-  
+        // console.log(`[SW] Content is Blob. Type: ${fileContent.type}`);
+        return { contentType: fileContent.type || getMimeTypeFromExtension(filePath) || 'application/octet-stream', body: fileContent };
+    }
     if (fileContent instanceof ArrayBuffer || ArrayBuffer.isView(fileContent)) {
          // console.log(`[SW] Content is ArrayBuffer/TypedArray.`);
         return { contentType: getMimeTypeFromExtension(filePath), body: fileContent };
@@ -876,7 +867,9 @@ if (method === 'GET' && requestedPath.startsWith('/webgal/game/vocal/')) {
             // console.log(`[SW] Character vocal loaded from IndexedDB: ${targetPathForReadFile}`);
             return new Response(body, { status: 206, headers: {
               'accept-ranges':'bytes',
-              'Content-Type': contentType} });
+              'Content-Type': contentType,
+              'Content-Range': `bytes 0-${body.size-1}/${body.size}`,
+              'Content-Length': body.size} });
            } catch (idbError) {
               if (idbError.name === 'FileNotFoundError') {
                console.warn(`[SW] Audio ${requestedPath} (path: ${targetPathForReadFile}) not found in IndexedDB. Falling back to network.`);
