@@ -532,10 +532,25 @@ function determineContentTypeAndBody(fileContent, filePath) {
             console.warn(`[SW] Error parsing data URI from ${filePath}. Falling back.`, e);
         }
     }
-    if (fileContent instanceof Blob) {
-        // console.log(`[SW] Content is Blob. Type: ${fileContent.type}`);
-        return { contentType: fileContent.type || getMimeTypeFromExtension(filePath) || 'application/octet-stream', body: fileContent };
+    if (fileContent instanceof Blob) {  // Change needed here
+      // Attempt to read the Blob as an ArrayBuffer.  Handle errors gracefully.
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const arrayBuffer = reader.result;
+         // console.log(`here`, reader.result)
+          resolve({ contentType: fileContent.type || getMimeTypeFromExtension(filePath) || 'application/octet-stream', body: arrayBuffer }); // Return ArrayBuffer and type
+        };
+        reader.onerror = () => {
+            console.error(`[SW] Failed to read Blob to ArrayBuffer for ${filePath}:`, reader.error);
+  
+            //Consider fallback logic, perhaps return the Blob as is with a warning?
+            reject(reader.error); // bubble the error!
+        };
+        reader.readAsArrayBuffer(fileContent);
+      });
     }
+  
     if (fileContent instanceof ArrayBuffer || ArrayBuffer.isView(fileContent)) {
          // console.log(`[SW] Content is ArrayBuffer/TypedArray.`);
         return { contentType: getMimeTypeFromExtension(filePath), body: fileContent };
@@ -867,10 +882,9 @@ if (method === 'GET' && requestedPath.startsWith('/webgal/game/vocal/')) {
             // console.log(`[SW] Character vocal loaded from IndexedDB: ${targetPathForReadFile}`);
             return new Response(body, { status: 206, headers: {
               'accept-ranges':'bytes',
-              //'Content-Type': contentType,
-              'Content-Type': 'audio/mpeg',
-              'Content-Range': `bytes 0-${body.size-1}/${body.size}`,
-              'Content-Length': body.size} });
+              'Content-Type': contentType,
+              'Content-Range': `bytes 0-${body.byteLength-1}/${body.byteLength}`,
+              'Content-Length': body.byteLength} });
            } catch (idbError) {
               if (idbError.name === 'FileNotFoundError') {
                console.warn(`[SW] Audio ${requestedPath} (path: ${targetPathForReadFile}) not found in IndexedDB. Falling back to network.`);
