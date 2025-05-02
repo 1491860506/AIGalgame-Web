@@ -865,11 +865,30 @@ if (method === 'GET' && requestedPath.startsWith('/webgal/game/vocal/')) {
             const fileContent = await readFile(targetPathForReadFile);
             const { body, contentType } = determineContentTypeAndBody(fileContent, targetPathForReadFile);
             // console.log(`[SW] Character vocal loaded from IndexedDB: ${targetPathForReadFile}`);
-            return new Response(body, { status: 206, headers: {
-              'accept-ranges':'bytes',
+        // 检查是否有Range请求
+        const rangeHeader = event.request.headers.get('Range');
+        if (rangeHeader) {
+          // 处理范围请求，返回206
+          return new Response(body, {
+            status: 206,
+            headers: {
               'Content-Type': contentType,
-              'Content-Range': `bytes 0-${body.size-1}/${body.size}`,
-              'Content-Length': body.size} });
+              'Content-Range': `bytes 0-${body.size - 1}/${body.size}`,
+              'Content-Length': body.size,
+              'Accept-Ranges': 'bytes'
+            }
+          });
+        } else {
+          // 无Range头，返回整个文件（200 OK）
+          return new Response(body, {
+            status: 200,
+            headers: {
+              'Content-Type': contentType,
+              'Content-Length': body.size,
+              'Accept-Ranges': 'bytes'
+            }
+          });
+        }
            } catch (idbError) {
               if (idbError.name === 'FileNotFoundError') {
                console.warn(`[SW] Audio ${requestedPath} (path: ${targetPathForReadFile}) not found in IndexedDB. Falling back to network.`);
