@@ -532,24 +532,18 @@ function determineContentTypeAndBody(fileContent, filePath) {
             console.warn(`[SW] Error parsing data URI from ${filePath}. Falling back.`, e);
         }
     }
-    if (fileContent instanceof Blob) {  // Change needed here
-      // Attempt to read the Blob as an ArrayBuffer.  Handle errors gracefully.
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          const arrayBuffer = reader.result;
-         // console.log(`here`, reader.result)
-          resolve({ contentType: fileContent.type || getMimeTypeFromExtension(filePath) || 'application/octet-stream', body: arrayBuffer }); // Return ArrayBuffer and type
-        };
-        reader.onerror = () => {
-            console.error(`[SW] Failed to read Blob to ArrayBuffer for ${filePath}:`, reader.error);
-  
-            //Consider fallback logic, perhaps return the Blob as is with a warning?
-            reject(reader.error); // bubble the error!
-        };
-        reader.readAsArrayBuffer(fileContent);
-      });
-    }
+    if (fileContent instanceof Blob) {
+      // console.log(`[SW] Content is Blob. Type: ${fileContent.type}`);
+      // Convert Blob to ArrayBuffer before returning
+       return new Promise((resolve, reject) => {
+           const reader = new FileReader();
+            reader.onload = () => {
+                resolve({ contentType: fileContent.type || getMimeTypeFromExtension(filePath) || 'application/octet-stream', body: reader.result });
+           };
+           reader.onerror = reject;
+           reader.readAsArrayBuffer(fileContent);
+       });
+  }
   
     if (fileContent instanceof ArrayBuffer || ArrayBuffer.isView(fileContent)) {
          // console.log(`[SW] Content is ArrayBuffer/TypedArray.`);
