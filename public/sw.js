@@ -868,7 +868,7 @@ if (method === 'GET' && requestedPath.startsWith('/webgal/game/vocal/')) {
             return new Response(body, { status: 206, headers: {
               'accept-ranges':'bytes',
               'Content-Type': contentType,
-              'Content-Range': `bytes 0-${(body.size - 1)}/${body.size}`,
+              'Content-Range': `bytes 0-1/${body.size}`,
               'Content-Length': body.size} });
            } catch (idbError) {
               if (idbError.name === 'FileNotFoundError') {
