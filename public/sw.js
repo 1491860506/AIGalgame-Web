@@ -468,7 +468,7 @@ function getMimeTypeFromExtension(filePath) {
     case 'svg': return 'image/svg+xml';
     case 'webp': return 'image/webp';
     case 'mp3': return 'audio/mpeg';
-    case 'wav': return 'audio/wav';
+    //case 'wav': return 'audio/wav';
     case 'ogg': return 'audio/ogg';
     case 'mp4': return 'video/mp4';
     case 'webm': return 'video/webm';
