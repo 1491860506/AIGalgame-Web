@@ -866,7 +866,8 @@ if (method === 'GET' && requestedPath.startsWith('/webgal/game/vocal/')) {
             const { body, contentType } = determineContentTypeAndBody(fileContent, targetPathForReadFile);
             // console.log(`[SW] Character vocal loaded from IndexedDB: ${targetPathForReadFile}`);
             return new Response(body, { status: 206, headers: { 'Content-Type': contentType,
-              'Content-Range': `bytes 0-${(body.size - 1)}/${body.size}`} });
+              'Content-Range': `bytes 0-${(body.size - 1)}/${body.size}`,
+              'Content-Length': body.size} });
            } catch (idbError) {
               if (idbError.name === 'FileNotFoundError') {
                console.warn(`[SW] Audio ${requestedPath} (path: ${targetPathForReadFile}) not found in IndexedDB. Falling back to network.`);
