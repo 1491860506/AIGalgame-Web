@@ -865,7 +865,9 @@ if (method === 'GET' && requestedPath.startsWith('/webgal/game/vocal/')) {
             const fileContent = await readFile(targetPathForReadFile);
             const { body, contentType } = determineContentTypeAndBody(fileContent, targetPathForReadFile);
             // console.log(`[SW] Character vocal loaded from IndexedDB: ${targetPathForReadFile}`);
-            return new Response(body, { status: 206, headers: { 'Content-Type': contentType,
+            return new Response(body, { status: 206, headers: {
+              'accept-ranges':'bytes',
+              'Content-Type': contentType,
               'Content-Range': `bytes 0-${(body.size - 1)}/${body.size}`,
               'Content-Length': body.size} });
            } catch (idbError) {
