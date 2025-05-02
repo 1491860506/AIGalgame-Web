@@ -461,14 +461,14 @@ function getMimeTypeFromExtension(filePath) {
     case 'html': return 'text/html; charset=utf-8';
     case 'css': return 'text/css; charset=utf-8';
     case 'js': return 'text/javascript; charset=utf-8';
-    case 'jpg':
+    case 'jpg': return 'image/jpg';
     case 'jpeg': return 'image/jpeg';
     case 'png': return 'image/png';
     case 'gif': return 'image/gif';
     case 'svg': return 'image/svg+xml';
     case 'webp': return 'image/webp';
     case 'mp3': return 'audio/mpeg';
-    //case 'wav': return 'audio/wav';
+    case 'wav': return 'audio/wav';
     case 'ogg': return 'audio/ogg';
     case 'mp4': return 'video/mp4';
     case 'webm': return 'video/webm';
