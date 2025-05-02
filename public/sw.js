@@ -517,6 +517,57 @@ function parseDataUri(uri) {
   }
 }
 
+// --- Helper function to parse Range header ---
+// (Add this function somewhere accessible within your sw.js)
+/**
+ * Parses the Range header.
+ * Spec: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Range
+ * @param {string} rangeHeader - The value of the Range header (e.g., "bytes=0-1023").
+ * @param {number} totalSize - The total size of the resource.
+ * @returns {{start: number, end: number} | null} Parsed range or null if invalid.
+ */
+function parseRangeHeader(rangeHeader, totalSize) {
+  if (!rangeHeader || !rangeHeader.startsWith('bytes=')) {
+      return null;
+  }
+
+  const ranges = rangeHeader.substring(6).split(',');
+  if (ranges.length !== 1) {
+      // We only support single range requests for simplicity
+      console.warn('[SW parseRangeHeader] Multiple ranges requested, only handling first.');
+      // return null; // Or handle the first one
+  }
+
+  const range = ranges[0].split('-');
+  const startStr = range[0].trim();
+  const endStr = range[1].trim();
+
+  let start = startStr ? parseInt(startStr, 10) : 0;
+  let end = endStr ? parseInt(endStr, 10) : totalSize - 1;
+
+  if (isNaN(start) || isNaN(end) || start > end) {
+      return null; // Invalid numbers or order
+  }
+
+  // Handle requests like "bytes=-500" (last 500 bytes)
+  if (startStr === '' && endStr !== '') {
+      start = Math.max(0, totalSize - end); // 'end' here is the number of bytes from the end
+      end = totalSize - 1;
+  }
+  // Handle requests like "bytes=1000-" (from 1000 to the end) handled by default end calculation
+
+  // Clamp range to valid boundaries
+  start = Math.max(0, start);
+  end = Math.min(end, totalSize - 1);
+
+  if (start >= totalSize) {
+       return null; // Requested range starts after the end of the file
+  }
+
+
+  return { start, end };
+}
+
 /**
  * Determines the appropriate Content-Type and body for the Response.
  * @param {any} fileContent - The raw data read from IndexedDB.
