@@ -849,46 +849,69 @@ if (method === 'GET' && requestedPath.startsWith('/webgal/game/vocal/')) {
     (async () => {
        let dynamicTitle;
           try {
-            dynamicTitle = await getDynamicTitle(); // Fetch title first
+            dynamicTitle = await getDynamicTitle();
           } catch (titleError) {
-             if (titleError.name === 'TitleConfigurationError') {
-               return createErrorResponse(500, 'Configuration Error', titleError.message);
-             }
-             // Handle other potential errors from getDynamicTitle if necessary
+             // ... (error handling)
              return createErrorResponse(500, 'Internal Server Error', `Unexpected error getting title: ${titleError.message}`);
           }
        //Create the idb path
         const targetPathForReadFile = `/data/${dynamicTitle}/audio/${x}/${y}.wav`;
 
-        // console.log(`[SW] Attempting to load audio vocal from IndexedDB: ${targetPathForReadFile}`);
-         try  {
-            const fileContent = await readFile(targetPathForReadFile);
-            const { body, contentType } = determineContentTypeAndBody(fileContent, targetPathForReadFile);
-            // console.log(`[SW] Character vocal loaded from IndexedDB: ${targetPathForReadFile}`);
-        // 检查是否有Range请求
-        const rangeHeader = event.request.headers.get('Range');
-        if (rangeHeader) {
-          // 处理范围请求，返回206
-          return new Response(body, {
-            status: 206,
-            headers: {
-              'Content-Type': contentType,
-              'Content-Range': `bytes 0-${body.size - 1}/${body.size}`,
-              'Content-Length': body.size,
-              'Accept-Ranges': 'bytes'
+        try  {
+            const fileContent = await readFile(targetPathForReadFile); // This should be a Blob
+            if (!(fileContent instanceof Blob)) {
+                // If it's not a blob, maybe it wasn't stored correctly?
+                console.error(`[SW Vocal] Expected Blob but got ${typeof fileContent} for ${targetPathForReadFile}`);
+                return createErrorResponse(500, 'Internal Server Error', 'Invalid data type retrieved from IndexedDB for audio.');
             }
-          });
-        } else {
-          // 无Range头，返回整个文件（200 OK）
-          return new Response(body, {
-            status: 200,
-            headers: {
-              'Content-Type': contentType,
-              'Content-Length': body.size,
-              'Accept-Ranges': 'bytes'
+
+            const blob = fileContent; // Use 'blob' for clarity
+            const totalSize = blob.size;
+            const contentType = blob.type || getMimeTypeFromExtension(targetPathForReadFile) || 'audio/wav'; // Get type from blob first
+
+            const rangeHeader = event.request.headers.get('Range');
+
+            if (rangeHeader) {
+                // Parse the Range header (e.g., "bytes=0-1023", "bytes=1024-", "bytes=-500")
+                const range = parseRangeHeader(rangeHeader, totalSize);
+
+                if (range && range.start < totalSize) {
+                    // Valid range requested
+                    const chunkSize = range.end - range.start + 1;
+                    const slicedBlob = blob.slice(range.start, range.end + 1, contentType); // Slice the blob
+
+                    const headers = {
+                        'Content-Type': contentType,
+                        'Content-Range': `bytes ${range.start}-${range.end}/${totalSize}`,
+                        'Content-Length': chunkSize, // Length of the slice
+                        'Accept-Ranges': 'bytes'
+                    };
+                    // console.log(`[SW Vocal] Serving 206 Partial Content: Range ${range.start}-${range.end}/${totalSize}, Size: ${chunkSize}`);
+                    return new Response(slicedBlob, { status: 206, headers });
+
+                } else {
+                    // Invalid Range header format or range start beyond file size
+                    console.warn(`[SW Vocal] Invalid Range header "${rangeHeader}" for size ${totalSize}`);
+                    // Respond with 416 Range Not Satisfiable or fallback to 200 OK?
+                    // Let's fallback to 200 OK for simplicity here, though 416 might be more correct
+                    // return new Response('Range Not Satisfiable', { status: 416, headers: { 'Content-Range': `bytes */${totalSize}` } });
+                    const headers = {
+                        'Content-Type': contentType,
+                        'Content-Length': totalSize,
+                        'Accept-Ranges': 'bytes' // Still accept ranges even if this specific one was bad
+                    };
+                    return new Response(blob, { status: 200, headers });
+                }
+            } else {
+                // No Range header, return the entire file (200 OK)
+                 // console.log(`[SW Vocal] Serving 200 OK: Size ${totalSize}`);
+                const headers = {
+                    'Content-Type': contentType,
+                    'Content-Length': totalSize,
+                    'Accept-Ranges': 'bytes' // Indicate we support ranges for future requests
+                };
+                return new Response(blob, { status: 200, headers });
             }
-          });
-        }
            } catch (idbError) {
               if (idbError.name === 'FileNotFoundError') {
                console.warn(`[SW] Audio ${requestedPath} (path: ${targetPathForReadFile}) not found in IndexedDB. Falling back to network.`);
@@ -1288,27 +1311,48 @@ if (method === 'GET' && requestedPath.startsWith('/webgal/game/vocal/')) {
             const { body, contentType } = determineContentTypeAndBody(fileContent, targetPathForReadFile);
             // console.log(`[SW] Music loaded from IndexedDB: ${targetPathForReadFile}`);
             const rangeHeader = event.request.headers.get('Range');
-        if (rangeHeader) {
-          // 处理范围请求，返回206
-          return new Response(body, {
-            status: 206,
-            headers: {
-              'Content-Type': contentType,
-              'Content-Range': `bytes 0-${body.size - 1}/${body.size}`,
-              'Content-Length': body.size,
-              'Accept-Ranges': 'bytes'
+
+            if (rangeHeader) {
+                // Parse the Range header (e.g., "bytes=0-1023", "bytes=1024-", "bytes=-500")
+                const range = parseRangeHeader(rangeHeader, totalSize);
+
+                if (range && range.start < totalSize) {
+                    // Valid range requested
+                    const chunkSize = range.end - range.start + 1;
+                    const slicedBlob = blob.slice(range.start, range.end + 1, contentType); // Slice the blob
+
+                    const headers = {
+                        'Content-Type': contentType,
+                        'Content-Range': `bytes ${range.start}-${range.end}/${totalSize}`,
+                        'Content-Length': chunkSize, // Length of the slice
+                        'Accept-Ranges': 'bytes'
+                    };
+                    // console.log(`[SW Vocal] Serving 206 Partial Content: Range ${range.start}-${range.end}/${totalSize}, Size: ${chunkSize}`);
+                    return new Response(slicedBlob, { status: 206, headers });
+
+                } else {
+                    // Invalid Range header format or range start beyond file size
+                    console.warn(`[SW Vocal] Invalid Range header "${rangeHeader}" for size ${totalSize}`);
+                    // Respond with 416 Range Not Satisfiable or fallback to 200 OK?
+                    // Let's fallback to 200 OK for simplicity here, though 416 might be more correct
+                    // return new Response('Range Not Satisfiable', { status: 416, headers: { 'Content-Range': `bytes */${totalSize}` } });
+                    const headers = {
+                        'Content-Type': contentType,
+                        'Content-Length': totalSize,
+                        'Accept-Ranges': 'bytes' // Still accept ranges even if this specific one was bad
+                    };
+                    return new Response(blob, { status: 200, headers });
+                }
+            } else {
+                // No Range header, return the entire file (200 OK)
+                 // console.log(`[SW Vocal] Serving 200 OK: Size ${totalSize}`);
+                const headers = {
+                    'Content-Type': contentType,
+                    'Content-Length': totalSize,
+                    'Accept-Ranges': 'bytes' // Indicate we support ranges for future requests
+                };
+                return new Response(blob, { status: 200, headers });
             }
-          });
-        } else {
-          // 无Range头，返回整个文件（200 OK）
-          return new Response(body, {
-            status: 200,
-            headers: {
-              'Content-Type': contentType,
-              'Content-Length': body.size,
-              'Accept-Ranges': 'bytes'
-            }
-          });}
 
           } catch (idbError) {
             if (idbError.name === 'FileNotFoundError') {
