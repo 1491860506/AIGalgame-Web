@@ -873,7 +873,7 @@ function saveConfig(config) {
  * @returns {Promise<string|void>} 成功时返回void，失败时返回错误信息字符串
  */
 async function generateBackgroundMusic(updateStatus) {
-    updateStatus("加载配置...");
+    //updateStatus("加载配置...");
     const config = loadConfig();
     const storyTitle = config["剧情"]?.["story_title"] || "";
     const musicUrl = config["AI音乐"]?.["base_url"];
@@ -889,7 +889,7 @@ async function generateBackgroundMusic(updateStatus) {
     const musicName = "background";
     const filePathBase = `${musicDir}/${musicName}`;
 
-    updateStatus(`获取音乐API Key...`);
+    updateStatus(`生成音乐：获取音乐API Key...`);
     const key = await getMusicKey();
      if (!key || key === 'MOCK_MUSIC_API_KEY') { // 检查是否使用了模拟key
         const errorMsg = "生成音乐失败：音乐API Key 未配置或获取失败。";
@@ -905,7 +905,7 @@ async function generateBackgroundMusic(updateStatus) {
         'Content-Type': 'application/json'
     };
 
-    updateStatus("处理生成音乐的Prompt...");
+    //updateStatus("处理生成音乐的Prompt...");
     const [prompt1, prompt2] = await processPrompt('背景音乐生成');
 
     const id = Math.floor(Math.random() * 100000) + 1;
@@ -913,10 +913,10 @@ async function generateBackgroundMusic(updateStatus) {
     let gptAttempts = 0;
     const maxGptAttempts = 5; // 避免无限循环
 
-    updateStatus("调用LLM生成音乐信息...");
+    updateStatus("生成音乐：调用LLM生成音乐信息...");
     while (result === "error" && gptAttempts < maxGptAttempts) {
         gptAttempts++;
-        updateStatus(`调用LLM (尝试 ${gptAttempts}/${maxGptAttempts})...`);
+        updateStatus(`生成音乐：调用LLM (尝试 ${gptAttempts}/${maxGptAttempts})...`);
         try {
             const jsonString = await gpt(prompt1, prompt2, 'background_music', id);
 
@@ -949,7 +949,7 @@ async function generateBackgroundMusic(updateStatus) {
 
         } catch (e) {
             console.error("LLM call failed:", e);
-            updateStatus(`LLM调用失败: ${e.message}. Retrying...`);
+            //updateStatus(`生成音乐：LLM调用失败: ${e.message}. Retrying...`);
              await new Promise(resolve => setTimeout(resolve, 1000)); // 等待1秒重试
             result = "error"; // Treat as error to retry
         }
@@ -977,7 +977,7 @@ async function generateBackgroundMusic(updateStatus) {
     };
 
     console.log("开始调用音乐API生成背景音乐...");
-    updateStatus("调用音乐API生成背景音乐...");
+    updateStatus("生成音乐：调用音乐API生成背景音乐...");
     try {
         const response = await fetch(musicUrl, {
             method: 'POST',
@@ -1010,7 +1010,7 @@ async function generateBackgroundMusic(updateStatus) {
         await createFolder(musicDir).catch(e => console.warn("Failed to ensure music directory exists:", e));
 
 
-        updateStatus("下载并保存音乐文件 1...");
+        updateStatus("生成音乐：下载并保存音乐文件 1...");
         console.log(`下载音频 1: ${audioUrl1}`);
         try {
             const audioResponse1 = await fetch(audioUrl1);
@@ -1020,12 +1020,12 @@ async function generateBackgroundMusic(updateStatus) {
             console.log(`文件 ${filePathBase}.mp3 已下载并保存。`);
         } catch (e) {
             console.error(`下载或保存音频 1 失败:`, e);
-             updateStatus(`下载或保存音频 1 失败: ${e.message}`);
+             updateStatus(`生成音乐：下载或保存音频 1 失败: ${e.message}`);
              // Consider if this should be a hard error or continue
         }
 
 
-        updateStatus("下载并保存音乐文件 2...");
+        updateStatus("生成音乐：下载并保存音乐文件 2...");
         console.log(`下载音频 2: ${audioUrl2}`);
         try {
             const audioResponse2 = await fetch(audioUrl2);
@@ -1035,14 +1035,14 @@ async function generateBackgroundMusic(updateStatus) {
             console.log(`文件 ${filePathBase}1.mp3 已下载并保存。`);
         } catch (e) {
              console.error(`下载或保存音频 2 失败:`, e);
-             updateStatus(`下载或保存音频 2 失败: ${e.message}`);
+             updateStatus(`生成音乐：下载或保存音频 2 失败: ${e.message}`);
              // Consider if this should be a hard error or continue
         }
 
 
         // 下载视频文件 (可选，因为Python代码中有try/except)
         if (videoUrl1) {
-             updateStatus("下载并保存视频文件 1...");
+             //updateStatus("下载并保存视频文件 1...");
              console.log(`下载视频 1 (可选): ${videoUrl1}`);
             try {
                 const videoResponse1 = await fetch(videoUrl1);
@@ -1059,7 +1059,7 @@ async function generateBackgroundMusic(updateStatus) {
         }
 
          if (videoUrl2) {
-             updateStatus("下载并保存视频文件 2...");
+             //updateStatus("下载并保存视频文件 2...");
              console.log(`下载视频 2 (可选): ${videoUrl2}`);
             try {
                 const videoResponse2 = await fetch(videoUrl2);
@@ -1076,11 +1076,11 @@ async function generateBackgroundMusic(updateStatus) {
         }
 
 
-        updateStatus("背景音乐生成成功！");
+        updateStatus("生成音乐：背景音乐生成成功！");
         console.log("背景音乐生成成功！");
 
     } catch (e) {
-        const errorMsg = `音乐生成失败: ${e.message}`;
+        const errorMsg = `生成音乐失败: ${e.message}`;
         updateStatus(errorMsg);
         console.error(errorMsg);
         return errorMsg;
@@ -1094,7 +1094,7 @@ async function generateBackgroundMusic(updateStatus) {
  * @returns {Promise<string|void>} 成功时返回void，失败时返回错误信息字符串
  */
 async function generateEndMusic(storyId, updateStatus) {
-    updateStatus("加载配置...");
+    //updateStatus("加载配置...");
     const config = loadConfig();
     const storyTitle = config["剧情"]?.["story_title"] || "";
      const musicUrl = config["AI音乐"]?.["base_url"];
@@ -1130,7 +1130,7 @@ async function generateEndMusic(storyId, updateStatus) {
         'Content-Type': 'application/json'
     };
 
-    updateStatus("处理生成音乐的Prompt...");
+    //updateStatus("处理生成音乐的Prompt...");
     const [prompt1, prompt2] = await processPrompt('结尾音乐生成');
 
     const id = Math.floor(Math.random() * 100000) + 1;
@@ -1142,7 +1142,7 @@ async function generateEndMusic(storyId, updateStatus) {
     updateStatus("调用LLM生成音乐信息...");
     while (result === "error" && gptAttempts < maxGptAttempts) {
         gptAttempts++;
-        updateStatus(`调用LLM (尝试 ${gptAttempts}/${maxGptAttempts})...`);
+        updateStatus(`生成音乐：调用LLM (尝试 ${gptAttempts}/${maxGptAttempts})...`);
         try {
             const jsonString = await gpt(prompt1, prompt2, '音乐', id); // Note: Python used '音乐', background used 'background_music'
 
@@ -1175,7 +1175,7 @@ async function generateEndMusic(storyId, updateStatus) {
 
         } catch (e) {
             console.error("LLM call failed:", e);
-             updateStatus(`LLM调用失败: ${e.message}. Retrying...`);
+             //updateStatus(`LLM调用失败: ${e.message}. Retrying...`);
              await new Promise(resolve => setTimeout(resolve, 1000)); // 等待1秒重试
              result = "error"; // Treat as error to retry
         }
@@ -1322,7 +1322,7 @@ async function generateEndMusic(storyId, updateStatus) {
         console.log("结尾音乐生成成功！");
 
     } catch (e) {
-        const errorMsg = `音乐生成失败: ${e.message}`;
+        const errorMsg = `生成音乐失败: ${e.message}`;
         updateStatus(errorMsg);
         console.error(errorMsg);
         return errorMsg;

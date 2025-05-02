@@ -68,7 +68,7 @@ export function useStoryGenerator() {
             //coreTasks.push(gettoken('music'));
             // --- Concurrent Tasks (Not Awaited in Main Flow) ---
             // These run in the background. Errors are logged but don't stop the primary flow immediately.
-            updateStatus('启动并发任务(角色图, 背景音乐，标题图)...');
+            //updateStatus('启动并发任务(角色图, 背景音乐，标题图)...');
             coreTasks.push(getAllPersonsImagesJS(updateStatus).catch(e => {
                 console.error('后台任务失败 - 角色图像生成:', e);
                 updateStatus(`警告: 角色图像生成失败 - ${e.message}`);
@@ -97,19 +97,19 @@ export function useStoryGenerator() {
              }
             updateStatus('故事开篇完成.');
 
-            updateStatus('正在合并初始故事...');
+            //updateStatus('正在合并初始故事...');
             await mergeStory("0"); // Merge the initial story part
-            updateStatus('初始故事合并完成.');
+            //updateStatus('初始故事合并完成.');
 
             // --- Concurrent Tasks (Awaited via Promise.all) ---
-            updateStatus('启动并发任务 (语音, 选项, 地点图)...');
+            //updateStatus('启动并发任务 (语音, 选项, 地点图)...');
             
 
             coreTasks.push(generateVoice("0", updateStatus).catch(e => { throw new Error(`语音生成(0)失败: ${e.message}`) }));
             coreTasks.push(getChoice("0").catch(e => { throw new Error(`选项生成(0)失败: ${e.message}`) }));
             coreTasks.push(getPlacesImagesJS(0, updateStatus).catch(e => { throw new Error(`地点图像生成失败: ${e.message}`) }));
 
-            updateStatus('等待任务完成...');
+            //updateStatus('等待任务完成...');
             await Promise.all(coreTasks); // Wait for voice, choice, places images
             updateStatus('任务完成.');
 
@@ -183,12 +183,12 @@ export function useStoryGenerator() {
             }
 
             // --- Merge Story ---
-            updateStatus('正在合并故事...');
+            //updateStatus('正在合并故事...');
             await mergeStory("0");
-            updateStatus('故事合并完成.');
+            //updateStatus('故事合并完成.');
 
             // --- Concurrent Tasks (Awaited via Promise.all) ---
-            updateStatus('启动并发任务 (语音, 选项, 角色图, 地点图)...');
+            //updateStatus('启动并发任务 (语音, 选项, 角色图, 地点图)...');
             
 
             coreTasks.push(generateVoice("0", updateStatus).catch(e => { throw new Error(`语音生成(0)失败: ${e.message}`) }));

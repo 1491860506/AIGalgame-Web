@@ -38,6 +38,13 @@
           </label>
         </div>
 
+        <!-- Concurrency Input (Conditional based on allow_concurrency) -->
+        <div class="concurrency-config" v-if="currentConfigDefinition.allow_concurrency === true">
+           <label for="concurrency" class="concurrency-label">并发数:</label>
+           <input type="number" id="concurrency" v-model.number="configData.concurrency" min="1" class="concurrency-input">
+        </div>
+
+
         <!-- GPT Prompts (Conditional) -->
         <div v-if="currentConfigDefinition.gptprompt && currentConfigDefinition.gptprompt.length > 0" class="gpt-prompts">
            <div v-for="(prompt, index) in currentConfigDefinition.gptprompt" :key="index" class="prompt-item">
@@ -120,7 +127,7 @@
                    @change="handleFileSelect($event, index, currentEmotion, item.key)"
                    style="display: none;"
                   />
-                 <label :for="`fileInput_${index}_${currentEmotion}_${itemKey}`" class="btn btn-xs btn-file">选择文件</label>
+                 <label :for="`fileInput_${index}_${currentEmotion}_${item.key}`" class="btn btn-xs btn-file">选择文件</label>
               </div>
               <!-- Default Text Input -->
               <textarea
@@ -380,7 +387,8 @@ export default {
               "body": { "key": "your_api_key" }
             }
           ],
-          "judge_repeat_before": "{{modelname}}" // Example repeat logic
+          "judge_repeat_before": "{{modelname}}", // Example repeat logic
+          "allow_concurrency": false // Default to false
         };
 
         this.configurations[trimmedName] = defaultConfig;
@@ -511,7 +519,22 @@ export default {
         try {
             const saved = JSON.parse(localStorage.getItem(LS_KEY) || '{}');
             // Ensure we get a fresh object copy to avoid potential reactivity issues with direct localStorage reference
-            this.configData = JSON.parse(JSON.stringify(saved?.[SOVITS_KEY]?.[this.selectedConfigName] || {}));
+            const loadedData = saved?.[SOVITS_KEY]?.[this.selectedConfigName] || {};
+
+            // Initialize concurrency if enabled and missing/invalid
+            if (this.currentConfigDefinition?.allow_concurrency === true) {
+                const loadedConcurrency = loadedData.concurrency;
+                if (typeof loadedConcurrency !== 'number' || !Number.isInteger(loadedConcurrency) || loadedConcurrency <= 0) {
+                    loadedData.concurrency = 1; // Default to 1 if invalid or missing
+                }
+            } else {
+                 // If concurrency is not enabled in definition, ensure it's not set in data or ignored
+                 delete loadedData.concurrency;
+            }
+
+
+            this.configData = JSON.parse(JSON.stringify(loadedData)); // Deep copy for reactivity
+
 
             // Initialize default values from required_item and gptprompt if missing in loaded data
             // Note: This only initializes the first entry (index 1) and top-level gptprompt data
@@ -519,10 +542,8 @@ export default {
                  const key = Object.keys(item)[0]; // e.g., 'fileselect', 'modelname'
                  // If the item key is meant to be a file select, don't set a default text value
                  if (item.hasOwnProperty('fileselect') || key === 'fileselect') { // Check both key and potential property name
-                     // Ensure the key 'fileselect' or similar doesn't get initialized with a string default
-                     if (key === 'fileselect') return; // Skip this specific key
-                     // If the item definition is { key: "Label", fileselect: true }, skip initializing 'key' with "Label"
-                     if (item.fileselect === true) return;
+                     // Skip this specific key or definition indicating fileselect
+                     if (key === 'fileselect' || item.fileselect === true) return;
                  }
 
                  // Initialize if the key is not present or is explicitly null/undefined in loaded data for the first entry (index 1)
@@ -551,7 +572,14 @@ export default {
         } catch (error) {
             console.error(`Error loading data for config ${this.selectedConfigName}:`, error);
             this.showMessageBubble('error', `加载配置 "${this.selectedConfigName}" 的数据失败`);
-            this.configData = {};
+            this.configData = {}; // Reset on error
+            // Re-initialize concurrency and proxy defaults if definition allows, even after error
+            if (this.currentConfigDefinition?.allow_concurrency === true) {
+                 this.configData.concurrency = 1;
+            }
+             if (this.currentConfigDefinition?.localproxy === true) {
+                 this.configData.useLocalProxy = false;
+            }
         }
     },
 
@@ -560,6 +588,18 @@ export default {
             this.showMessageBubble('error', '没有选中的配置可保存');
             return;
         }
+
+        // Validate concurrency value before saving if enabled
+        if (this.currentConfigDefinition.allow_concurrency === true) {
+            const concurrencyValue = this.configData.concurrency;
+            if (typeof concurrencyValue !== 'number' || !Number.isInteger(concurrencyValue) || concurrencyValue <= 0) {
+                this.showMessageBubble('error', '并发数必须是大于0的整数，请修正后保存。');
+                // Reset to 1 or previous valid value if needed, but for now just prevent save.
+                // this.configData.concurrency = 1; // Or revert to previous valid state if stored
+                return;
+            }
+        }
+
 
         const fileSavePromises = [];
         for (const key in this.filesToSave) {
@@ -594,6 +634,7 @@ export default {
                 saved[SOVITS_KEY] = {};
             }
             // Save a deep copy of the current data
+            // Include concurrency value if present in configData
             saved[SOVITS_KEY][this.selectedConfigName] = JSON.parse(JSON.stringify(this.configData));
             localStorage.setItem(LS_KEY, JSON.stringify(saved));
 
@@ -605,7 +646,7 @@ export default {
              // Avoid double message if file write failed (Promise.all will catch it)
              if (fileSavePromises.length === 0 || !fileSavePromises.some(p => p.status === 'rejected')) { // Check if any file save explicitly rejected
                 this.showMessageBubble('error', `保存配置 "${this.selectedConfigName}" 数据失败`);
-             }
+            }
         }
     },
 
@@ -628,9 +669,24 @@ export default {
         const dataKey = this.getDataKey(index, emotion);
         // Vue 3: Use $set for reactivity with nested objects
         if (!this.configData[dataKey]) {
-            this.configData[dataKey]={};
+            // Note: While $set is technically for Vue 2, directly assigning properties to
+            // an existing reactive object *usually* works in Vue 3 Composition API
+            // or when the parent object is reactive. For clarity and compatibility,
+            // especially with potentially empty configData[dataKey], ensure reactivity.
+            // Using `this.$set` is safe, or ensure `configData` is initialized properly.
+            // Let's stick to direct assignment as `configData` itself is reactive.
+            this.configData[dataKey] = this.configData[dataKey] || {}; // Ensure the object exists
         }
+        // Ensure the target object is reactive or use a method that guarantees reactivity
+        // Vue 3 typically makes nested objects reactive upon access/assignment to the reactive parent
         this.configData[dataKey][itemKey]=value;
+
+        // Ensure reactivity update if needed (sometimes necessary for deeply nested or new properties)
+        // This is more for Vue 2, but can sometimes help ensure view updates in edge cases in Vue 3 reactivity nuances.
+        // Consider if `this.$set` is still preferred or if a direct assignment is sufficient.
+        // For typical data structures loaded from JSON, direct assignment like `this.configData[dataKey][itemKey] = value;` should be reactive in Vue 3
+        // if `this.configData` is properly reactive and `dataKey` already exists or is assigned an object.
+        // Since we ensure `this.configData[dataKey]` is an object, this direct assignment *should* work.
     },
 
 
@@ -641,8 +697,13 @@ export default {
         const dataKey = this.getDataKey(index, emotion);
         const fileStorageKey = `${dataKey}_${itemKey}`;
 
-        this.setInputValue(file.name, index, emotion, itemKey);
-        this.filesToSave[fileStorageKey] = file;
+        // Ensure the target object for reactivity exists before setting the value
+         if (!this.configData[dataKey]) {
+             this.configData[dataKey] = {};
+         }
+        this.configData[dataKey][itemKey] = file.name; // Set file name string in configData
+
+        this.filesToSave[fileStorageKey] = file; // Store the actual file object separately
         event.target.value = null; // Clear input value so selecting the same file triggers change event next time
     },
 
@@ -655,7 +716,13 @@ export default {
         if (!this.currentConfigDefinition || this.numberOfEntries <= 1) return;
 
         const firstDataKey = this.getDataKey(1, this.currentEmotion);
-        const valueToFill = this.configData[firstDataKey]?.[itemKey];
+        // Ensure the source data key exists before accessing
+        if (!this.configData[firstDataKey]) {
+             this.showMessageBubble('warning', `序号1的配置数据不存在，无法填充`);
+             return;
+        }
+        const valueToFill = this.configData[firstDataKey][itemKey];
+
 
         // Check for null/undefined/empty string as values to fill
         if (typeof valueToFill === 'undefined' || valueToFill === null || valueToFill === '') {
@@ -666,9 +733,16 @@ export default {
         let filledCount = 0;
         for (let i = 2; i <= this.numberOfEntries; i++) {
              const targetDataKey = this.getDataKey(i, this.currentEmotion);
+
+              // Ensure the target data key object exists for reactivity
+             if (!this.configData[targetDataKey]) {
+                 this.configData[targetDataKey] = {};
+             }
+
              // Only fill if the target is currently empty or different from the source value
              if (this.getInputValue(i, this.currentEmotion, itemKey) !== valueToFill) {
-                 this.setInputValue(valueToFill, i, this.currentEmotion, itemKey);
+                 // Directly assign to ensure reactivity after ensuring the parent object exists
+                 this.configData[targetDataKey][itemKey] = valueToFill;
                  filledCount++;
 
                  // If it's a fileselect, remove any pending file for the target index
@@ -779,6 +853,12 @@ export default {
             return { isValid: false, message: `url 必须是非空字符串` };
        }
 
+       // Validate allow_concurrency if present
+        if ('allow_concurrency' in parsedJson && typeof parsedJson.allow_concurrency !== 'boolean') {
+             return { isValid: false, message: 'allow_concurrency 必须是布尔值 (true 或 false)' };
+        }
+
+
         // Validate main URL request method/params/body consistency
         const mainMethod = parsedJson.requestmethod ? parsedJson.requestmethod.toUpperCase() : 'GET';
         const hasMainGet = Array.isArray(parsedJson.getparams) && parsedJson.getparams.length > 0;
@@ -841,6 +921,10 @@ export default {
             if (!this.allowedVariables.has(variableName)) {
                  return { isValid: false, message: `judge_repeat_before 中的变量 "{{${variableName}}}" 不允许。允许的变量有: ${[...this.allowedVariables].join(', ')}` };
             }
+             // If judge_repeat_before is set, allow_concurrency must be true
+             if (parsedJson.allow_concurrency !== true) {
+                  return { isValid: false, message: `如果定义了 judge_repeat_before，则 allow_concurrency 必须设置为 true 以启用并发控制。` };
+             }
         } else {
              // judge_repeat_before is optional or empty, no further validation needed for its content
         }
@@ -859,9 +943,13 @@ export default {
             const process = (item) => {
                 if (typeof item === 'string') {
                     let match;
+                    // Use exec in a loop to find all matches
                     while ((match = regex.exec(item)) !== null) {
                         vars.add(match[1]);
                     }
+                    // Reset regex lastIndex if needed (though for simple global regex it's fine)
+                    regex.lastIndex = 0;
+
                 } else if (Array.isArray(item)) {
                     item.forEach(process);
                 } else if (item !== null && typeof item === 'object') {
@@ -908,10 +996,8 @@ export default {
             if (!allowedVars.has(variable)) {
                 // Only add error if the variable is NOT allowed.
                 // The judge_repeat_before specific check already happened above.
-                 if (!(judgeRepeatBefore && typeof judgeRepeatBefore === 'string' && judgeRepeatBefore.match(/^\{\{\s*(\w+)\s*\}\}$/)?.[1] === variable && !this.allowedVariables.has(variable)))
-                {
-                     errors.push(`不允许的变量: {{${variable}}}`);
-                }
+                // Remove the specific judge_repeat_before check here as it's already validated above.
+                 errors.push(`不允许或未定义的变量: {{${variable}}}. 允许的变量可能来自 required_item, gptreturn, text, language.`);
             }
         }
 
@@ -923,6 +1009,7 @@ export default {
         // Return the original parsed JSON
         return { isValid: true, message: 'JSON 定义有效', parsedJson };
     },
+
 
     // ***** NEW: Method to revoke existing Blob URLs *****
     revokeTestAudioUrls() {
@@ -960,22 +1047,41 @@ export default {
         const lang = "zh"; // Assume Chinese for test text
         const testEmotion = this.currentEmotion || (this.emotionsToConfigure.length > 0 ? this.emotionsToConfigure[0] : ''); // Use current UI emotion or default
 
+        // For testing, use the local proxy setting from configData
         const useLocalProxy = this.configData?.useLocalProxy === true;
 
         try {
             // --- Prepare Variables Map for Test (using index 1 data) ---
-            const dataKey = this.getDataKey(nameId, testEmotion);
-            const rowData = this.configData?.[dataKey] || {};
+            // This map is needed for both before_requests and main url substitutions for the test case (index 1, current emotion)
+             const testVariablesMap = {};
+             testVariablesMap['language'] = lang; // Add language variable
+             // Note: The test text ("测试") and long text are added *later* specifically for the main request calls.
+             // They are NOT part of the map used for *before_requests*.
+             testVariablesMap['gptreturn'] = testEmotion; // Use the emotion chosen for the test
 
-            const testVariablesMap = {};
-            testVariablesMap['language'] = lang; // Add language variable
-            testVariablesMap['text'] = "测试"; // Add a default text variable for testing
+             // Determine the data key based on test index (1) and test emotion
+            const hasEmotionsConfigured = Array.isArray(this.currentConfigDefinition?.emotion_list) && this.currentConfigDefinition.emotion_list.length > 0;
+            // Determine the effective emotion for the data key look based on testEmotion and configured emotion list
+            let emotionUsedForKey = ''; // Default to empty string
+             if (hasEmotionsConfigured) {
+                  const emotionList = this.currentConfigDefinition.emotion_list || [];
+                  let effectiveEmotion = testEmotion || '';
 
-             // Add values from required_item in configData (index 1, current emotion) to the variables map
+                  if (effectiveEmotion === '' || !emotionList.includes(effectiveEmotion)) {
+                      const feedbackEmotion = this.currentConfigDefinition?.emotion_feedback;
+                       if (typeof feedbackEmotion === 'string' && feedbackEmotion !== '' && emotionList.includes(feedbackEmotion)) {
+                          effectiveEmotion = feedbackEmotion;
+                       }
+                  }
+                   emotionUsedForKey = effectiveEmotion;
+             }
+             const dataKey = hasEmotionsConfigured && emotionUsedForKey ? `${nameId}_${emotionUsedForKey}` : `${nameId}`;
+             const rowData = this.configData?.[dataKey] || {};
+
+             // Add values from required_item in configData (index 1, effective emotion) to the variables map
             (this.currentConfigDefinition?.required_item || []).forEach(item => {
                 const itemKey = Object.keys(item)[0]; // e.g., 'fileselect', 'modelname'
                 const valueFromData = rowData[itemKey];
-                 // Prefer saved data, fallback to default from definition if primitive, otherwise empty string
                  const itemDefaultValue = item[itemKey]; // Default value from definition { "key": "Default Value" }
                  if (valueFromData !== undefined && valueFromData !== null && valueFromData !== '') {
                      testVariablesMap[itemKey] = valueFromData;
@@ -986,12 +1092,10 @@ export default {
                  }
             });
 
-            // Add gptreturn variable using the test emotion
-             testVariablesMap['gptreturn'] = testEmotion; // Use the emotion chosen for the test
-
-            console.log("Test variables for substitution:", testVariablesMap);
+            console.log("Test variables (excluding text) for substitution:", testVariablesMap);
 
             // --- Handle Before Requests for Test ---
+            // The test function ALWAYS runs the before_requests if defined, ignoring judge_repeat_before.
             const beforeRequests = this.currentConfigDefinition?.before_requests;
 
             if (Array.isArray(beforeRequests) && beforeRequests.length > 0) {
@@ -1011,22 +1115,19 @@ export default {
                          body: beforeReqDef.body,
                      };
 
-                     // Substitute variables in beforeurl details using the test variables
+                     // Substitute variables in beforeurl details using the test variables map (which doesn't include text yet)
                      const substitutedBeforeReqDetails = substituteVariables(beforeReqDetails, testVariablesMap);
                      console.log(`Substituted Before Request ${i + 1} details:`, substitutedBeforeReqDetails);
 
                      try {
                          this.showMessageBubble('info', `正在进行测试前置请求 ${i + 1}/${beforeRequests.length}: ${substitutedBeforeReqDetails.url}`);
                          // Make the beforeurl request
-                         // Note: The test call *always* performs the before requests if defined, ignoring judge_repeat_before.
                          await makeApiRequest(
                              substitutedBeforeReqDetails.url,
                              substitutedBeforeReqDetails.requestmethod.toUpperCase(),
                              substitutedBeforeReqDetails.getparams,
                              substitutedBeforeReqDetails.body,
                              useLocalProxy
-                             // We don't pass updateStatus to makeApiRequest directly in test,
-                             // manage status messages here.
                          );
                          this.showMessageBubble('info', `测试前置请求 ${i + 1} 成功。`);
                          console.log(`Test Before Request ${i + 1} successful.`);
@@ -1052,14 +1153,14 @@ export default {
             const textShort = "测试";
             // Generate a unique filename for test previews
             const shortFileName = `test_short_${this.selectedConfigName}_${Date.now()}`;
-            // Update variablesMap with text for short audio
+            // Create a variables map *including* the specific text for the short audio test
             const shortTextVariablesMap = { ...testVariablesMap, text: textShort };
 
             this.showMessageBubble('info', `正在生成短文本语音...`);
-            // Use the same logic as generateVoice uses for the main request
+            // Use processConversationAudioRequest for the main request, passing appropriate data
              try {
                  // processConversationAudioRequest requires a mock conversation object and output directory
-                 const conversationMockShort = { id: 'test_short', character: 'TestChar', emotion: testEmotion, text: textShort };
+                 const conversationMockShort = { id: shortFileName, character: 'TestChar', emotion: testEmotion, text: textShort }; // Mock object for structure/emotion
                  const testAudioDir = `/data/test/tts_test_preview/${this.selectedConfigName}`; // Distinct temp directory
 
                  // Ensure test preview directory exists
@@ -1069,20 +1170,24 @@ export default {
                      }
                  });
 
+                 // Call processConversationAudioRequest
                  const resultShort = await processConversationAudioRequest(
-                     nameId, // Use index 1 data
-                     textShort,
-                     conversationMockShort,
-                     lang,
-                     shortFileName, // Filename without extension
+                     nameId, // Use index 1 for data lookup
+                     textShort, // Pass the actual text to synthesize
+                     conversationMockShort, // Pass the mock conversation object
+                     lang, // Pass language
+                     //shortFileName, // Filename without extension
                      this.currentConfigDefinition, // Pass unquoted definition
-                     this.configData, // Pass user data
+                     this.configData, // Pass user data (includes proxy, concurrency - though concurrency is ignored by this function)
                      testAudioDir, // Pass directory path
                      (msg) => console.log(`Test (Short): ${msg}`) // Simple status logging for this step
+                     // Note: processConversationAudioRequest builds its own variables map internally.
+                     // We pass the raw data and definition, and it does the substitution.
+                     // This is consistent with how generateVoice will use it.
                  );
 
-                 if (resultShort !== "ok") {
-                     throw new Error(`processConversationAudioRequest returned status "${resultShort}"`);
+                 if (resultShort["status"] !== "ok") {
+                     throw new Error(`processConversationAudioRequest for short text returned status "${resultShort}"`);
                  }
 
                  // Read the saved file blob and create URL
@@ -1105,13 +1210,13 @@ export default {
             const textLong = "斗之力，三段！望着测验魔石碑上面闪亮得甚至有些刺眼的五个大字，少年面无表情，唇角有着一抹自嘲，紧握的手掌，因为大力，而导致略微尖锐的指甲深深的刺进了掌心之中，带来一阵阵钻心的疼痛…";
              // Generate a unique filename for test previews
             const longFileName = `test_long_${this.selectedConfigName}_${Date.now()}`;
-             // Update variablesMap with text for long audio
-            const longTextVariablesMap = { ...testVariablesMap, text: textLong };
+             // Create a variables map *including* the specific text for the long audio test
+            const longTextVariablesMap = { ...testVariablesMap, text: textLong }; // Note: This map isn't directly passed to pCAR, but represents the variables available.
 
             this.showMessageBubble('info', `正在生成长文本语音...`);
             try {
                  // processConversationAudioRequest requires a mock conversation object and output directory
-                 const conversationMockLong = { id: 'test_long', character: 'TestChar', emotion: testEmotion, text: textLong };
+                 const conversationMockLong = { id: longFileName, character: 'TestChar', emotion: testEmotion, text: textLong }; // Mock object for structure/emotion
                  const testAudioDir = `/data/test/tts_test_preview/${this.selectedConfigName}`; // Same distinct temp directory
 
                  // Directory should already exist from the short audio step, but ensure anyway
@@ -1121,20 +1226,21 @@ export default {
                      }
                  });
 
+                 // Call processConversationAudioRequest
                  const resultLong = await processConversationAudioRequest(
-                     nameId, // Use index 1 data
-                     textLong,
-                     conversationMockLong,
-                     lang,
-                     longFileName, // Filename without extension
+                     nameId, // Use index 1 for data lookup
+                     textLong, // Pass the actual text to synthesize
+                     conversationMockLong, // Pass the mock conversation object
+                     lang, // Pass language
+                     //longFileName, // Filename without extension
                      this.currentConfigDefinition, // Pass unquoted definition
                      this.configData, // Pass user data
                      testAudioDir, // Pass directory path
                       (msg) => console.log(`Test (Long): ${msg}`) // Simple status logging
                  );
 
-                 if (resultLong !== "ok") {
-                     throw new Error(`processConversationAudioRequest returned status "${resultLong}"`);
+                 if (resultLong["status"] !== "ok") {
+                     throw new Error(`processConversationAudioRequest for long text returned status "${resultLong}"`);
                  }
 
                 // Read the saved file blob and create URL
@@ -1384,9 +1490,48 @@ body.dark-theme {
 .header-section { margin-bottom: 1.5rem; }
 .title { font-size: 1.5rem; font-weight: 600; color: var(--text-color); margin-bottom: 1.5rem; letter-spacing: -0.01em; }
 
-/* Proxy Config */
-.proxy-config { display: flex; align-items: center; margin: 1rem 0 1.5rem 0; padding: 0.75rem; background-color: var(--card-bg); border: 1px solid var(--border-color); border-radius: var(--border-radius); }
-.proxy-label { font-weight: 500; margin-right: 0.75rem; color: var(--text-color); }
+/* Proxy Config & Concurrency Config */
+.proxy-config,
+.concurrency-config {
+    display: flex;
+    align-items: center;
+    margin: 1rem 0; /* Adjusted margin */
+    padding: 0.75rem;
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+}
+/* Add margin between proxy and concurrency if both are visible */
+.proxy-config + .concurrency-config,
+.concurrency-config + .proxy-config {
+    margin-top: 0.5rem; /* Reduce space if both are present */
+}
+
+
+.proxy-label,
+.concurrency-label {
+  font-weight: 500;
+  margin-right: 0.75rem;
+  color: var(--text-color);
+  white-space: nowrap; /* Prevent wrapping */
+}
+
+.concurrency-input {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--input-border);
+    border-radius: var(--border-radius);
+    background-color: var(--input-bg);
+    color: var(--input-text);
+    width: 80px; /* Fixed width for number input */
+    text-align: center;
+     transition: border-color var(--transition-speed), box-shadow var(--transition-speed);
+}
+.concurrency-input:focus {
+    outline: none;
+    border-color: var(--input-focus);
+    box-shadow: 0 0 0 2px var(--primary-light);
+}
+
 
 /* Toggle Switch */
 .toggle-switch { position: relative; display: inline-block; width: 40px; height: 20px; }
@@ -1487,6 +1632,10 @@ input:checked + .toggle-label-switch:before { transform: translateX(20px); }
   .voice-config { padding: 1rem; }
   .config-management-bar { flex-direction: column; align-items: stretch; padding: 1rem; }
   .config-management-bar select { max-width: none; }
+   .proxy-config, .concurrency-config { flex-direction: column; align-items: stretch; }
+   .proxy-config label, .concurrency-config label { margin-right: 0; margin-bottom: 0.5rem; }
+   .concurrency-input { width: 100%; text-align: left;}
+
   .gpt-prompts { grid-template-columns: 1fr; }
   .table-header, .entry-row { flex-wrap: wrap; padding: 0.5rem; }
   .col-index { width: 100%; text-align: left; margin-bottom: 0.5rem; padding: 0.5rem 0; font-size: 1rem; font-weight: 600; color: var(--text-color); border-bottom: 1px solid var(--border-color); }
@@ -1499,6 +1648,10 @@ input:checked + .toggle-label-switch:before { transform: translateX(20px); }
   .btn-file { border-radius: 0 0 var(--border-radius) var(--border-radius); width: 100%; }
   .save-panel { justify-content: center; }
   .modal-content { width: 95%; padding: 1.5rem; max-height: 90vh; }
+
+  .test-controls { flex-direction: column; align-items: stretch; }
+  .audio-preview { flex-direction: column; align-items: stretch; gap: 0.5rem; }
+  .audio-preview label { min-width: unset; }
 }
 
 /* ***** NEW: Test Panel Styles ***** */
@@ -1531,11 +1684,11 @@ input:checked + .toggle-label-switch:before { transform: translateX(20px); }
 .btn-test {
   min-width: 140px; /* Ensure button text fits */
   background-color: var(--info-color);
-  color: #448684;
+  color: white; /* White text on info color */
   border-color: var(--info-color);
 }
 body.dark-theme .btn-test {
-    background-color: var(--info-color); /* Adjust dark theme info color if needed */
+     color: var(--text-color); /* Dark theme text on info color */
 }
 
 .btn-test:hover:not(:disabled) {
@@ -1544,7 +1697,6 @@ body.dark-theme .btn-test {
 }
 body.dark-theme .btn-test:hover:not(:disabled) {
     background-color: #93c5fd; /* Lighter blue hover for dark */
-    color: var(--text-color);
     border-color: #93c5fd;
 }
 

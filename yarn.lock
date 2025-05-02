@@ -1196,6 +1196,13 @@ open@^10.1.0:
     is-inside-container "^1.0.0"
     is-wsl "^3.1.0"
 
+p-limit@^6.2.0:
+  version "6.2.0"
+  resolved "https://registry.npmjs.org/p-limit/-/p-limit-6.2.0.tgz"
+  integrity sha512-kuUqqHNUqoIWp/c467RI4X6mmyuojY5jGutNU0wVTmEOOfcuwLqyMVoAi9MKi2Ak+5i9+nhmrK4ufZE8069kHA==
+  dependencies:
+    yocto-queue "^1.1.1"
+
 parse-ms@^4.0.0:
   version "4.0.0"
   resolved "https://registry.npmjs.org/parse-ms/-/parse-ms-4.0.0.tgz"
@@ -1506,6 +1513,11 @@ yallist@^3.0.2:
   version "3.1.1"
   resolved "https://registry.npmjs.org/yallist/-/yallist-3.1.1.tgz"
   integrity sha512-a4UGQaWPH59mOXUYnAG2ewncQS4i4F43Tv3JoAM+s2VDAmS9NsK8GpDMLrCHPksFT7h3K6TOoUNn2pb7RoXx4g==
+
+yocto-queue@^1.1.1:
+  version "1.2.1"
+  resolved "https://registry.npmjs.org/yocto-queue/-/yocto-queue-1.2.1.tgz"
+  integrity sha512-AyeEbWOu/TAXdxlV9wmGcR0+yh2j3vYPGOECcIj2S7MkrLyC7ne+oye2BKTItt0ii2PHk4cDy+95+LshzbXnGg==
 
 yoctocolors@^2.0.0:
   version "2.1.1"

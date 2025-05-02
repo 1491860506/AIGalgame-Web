@@ -19,6 +19,7 @@
     "@icon-park/vue-next": "^1.4.2",
     "modern-rembg": "^0.1.2",
     "onnxruntime-web": "^1.18.0",
+    "p-limit": "^6.2.0",
     "vue": "^3.5.13",
     "vue-json-pretty": "^2.4.0",
     "vue-router": "^4.5.0",

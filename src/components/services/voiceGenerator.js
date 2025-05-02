@@ -2,12 +2,21 @@
 
 import { readFile, writeFile, listDirectory, getMetadata, createFolder } from './IndexedDBFileSystem.js';
 import proxyfetch from './proxyfetch.js'; // Ensure this is imported
+import pLimit from 'p-limit'; // Import the concurrency limiter utility
 
 // --- Configuration Keys ---
 const LS_KEY = 'aiGalgameConfig';
 const SOVITS_KEY = 'SOVITS';
 const CONFIG_DEFINITIONS_KEY = 'config';
 const SELECTED_MODEL_KEY = 'model_choose';
+
+// --- Module-scoped Global State for judge_repeat_before ---
+// This variable holds the value of the 'judge_repeat_before' variable from the
+// last conversation for which the 'before_requests' were successfully executed
+// for the currently selected configuration.
+// Using a Symbol ensures that the initial value will never strictly match any
+// valid variable value (string, number, boolean, null, undefined).
+let lastJudgeRepeatValue = Symbol('initial_judge_repeat_value');
 
 // --- Helper Functions ---
 
@@ -31,6 +40,7 @@ function loadFullConfig() {
 
 /**
  * Saves the entire configuration object to localStorage.
+ * This function is generally not used by generateVoice itself, but provided for completeness.
  * @param {object} config - The full config object to save.
  */
 function saveFullConfig(config) {
@@ -44,11 +54,9 @@ function saveFullConfig(config) {
 
 
 /**
- * Deeply unquotes variables like "{{variable}}" back to {{variable}}
- * This is needed because definitions are stored with quoted variables.
+ * Deeply unquotes variables like '"{{variable}}"' back to '{{variable}}'
+ * This is needed because definitions are stored with quoted variables by the Vue component.
  * It recursively traverses objects and arrays.
- * It specifically looks for string values that are EXACTLY "{{variable}}" after JSON.parse
- * and unquotes them.
  * @param {*} data - The data (object, array, string) to unquote.
  * @returns {*} - The data with variables unquoted.
  */
@@ -56,13 +64,7 @@ function unquoteVariablesDeep(data) {
     if (typeof data === 'string') {
          // Check if the string is EXACTLY a quoted variable like '"{{var}}"'
          // This regex matches the escaped quotes and the variable placeholder inside
-         // Note: JSON.parse would turn '"{{var}}"' into '"{{var}}"', so we need to match the string value that starts and ends with quotes.
-         // A simpler approach that works with JSON.parse behavior: If the string value contains {{...}} and is meant to be a variable,
-         // it's usually stored as a string like "{{variable}}" in the JSON.
-         // The goal here is to remove those surrounding quotes so it's just {{variable}} for logic/editing.
-         // Let's refine the regex based on how `quoteVariables` works. If `quoteVariables` wraps "{{var}}" in quotes resulting in "\"{{var}}\"",
-         // then JSON.parse reads it as the string '"{{var}}"' inside JS.
-         // So, we look for strings that start and end with literal quotes AND contain {{...}} inside.
+         // JSON.parse results in a string value like '"{{var}}"' if the original JSON was "\"{{var}}\""
          const match = data.match(/^"({{\s*\w+\s*}})"$/);
          if (match) {
              return match[1]; // Return the variable placeholder {{var}} without the surrounding quotes
@@ -120,18 +122,18 @@ function substituteVariables(template, variablesMap) {
  * Handles URL parameters for GET and JSON body for POST.
  * @param {string} url - The target URL.
  * @param {string} method - HTTP method ('GET' or 'POST'). Case-insensitive input is handled.
- * @param {Array<object>} [getParams=[]] - Array of GET parameters [{key: value}].
+ * @param {Array<object>|object} [getParams] - Array of GET parameters [{key: value}] or object {key: value}.
  * @param {*} [postBody] - The request body for POST requests (can be any JSON-serializable type).
  * @param {boolean} useLocalProxy - Whether to use the local proxy.
  * @returns {Promise<Response>} The Response object on success. Throws an error on failure.
  */
-async function makeApiRequest(url, method, getParams = [], postBody, useLocalProxy) {
+async function makeApiRequest(url, method, getParams, postBody, useLocalProxy) {
     const fetchMethod = useLocalProxy ? proxyfetch : fetch;
     const fetchMethodName = useLocalProxy ? 'proxyfetch' : 'fetch';
     const requestMethod = method.toUpperCase(); // Ensure method is uppercase
 
-    console.log(`Using fetch method: ${fetchMethodName} for ${requestMethod} request`);
-    console.log(`Target URL: ${url}`);
+    // console.log(`Using fetch method: ${fetchMethodName} for ${requestMethod} request`); // Avoid excessive logging
+    console.log(`Executing API call to ${url}`); // Log original URL for clarity
 
     let finalUrl = url;
     const fetchOptions = {
@@ -140,14 +142,11 @@ async function makeApiRequest(url, method, getParams = [], postBody, useLocalPro
     };
 
     // Append GET parameters to URL
-    if (requestMethod === 'GET' && Array.isArray(getParams) && getParams.length > 0) {
+    if (requestMethod === 'GET' && (Array.isArray(getParams) || (typeof getParams === 'object' && getParams !== null))) {
         const urlParams = new URLSearchParams();
-        getParams.forEach(paramObj => {
-            const key = Object.keys(paramObj)[0];
-            const value = paramObj[key];
-            // Ensure value is treated as string for URLSearchParams
-            // Handle cases where substitution might have resulted in non-primitive unexpectedly
-            if (value !== undefined && value !== null) { // Append if value is not null or undefined
+
+        const addParam = (key, value) => {
+            if (value !== undefined && value !== null) {
                  // Check if value is a primitive or has a sensible toString
                  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
                       urlParams.append(key, String(value));
@@ -157,35 +156,33 @@ async function makeApiRequest(url, method, getParams = [], postBody, useLocalPro
             } else {
                  console.warn(`Skipping null/undefined GET parameter "${key}".`);
             }
-        });
-         const queryString = urlParams.toString();
+        };
+
+        if (Array.isArray(getParams)) {
+            getParams.forEach(paramObj => {
+                 if (typeof paramObj === 'object' && paramObj !== null) {
+                     for(const key in paramObj) {
+                          if (Object.hasOwnProperty.call(paramObj, key)) {
+                              addParam(key, paramObj[key]);
+                          }
+                     }
+                 } else {
+                      console.warn("Skipping invalid GET parameter object in array:", paramObj);
+                 }
+            });
+        } else { // Handle object case { key: value }
+            for(const key in getParams) {
+                if (Object.hasOwnProperty.call(getParams, key)) {
+                   addParam(key, getParams[key]);
+                }
+            }
+        }
+
+        const queryString = urlParams.toString();
          if (queryString) {
             finalUrl += (finalUrl.includes('?') ? '&' : '?') + queryString;
          }
         console.log(`Constructed GET URL: ${finalUrl}`);
-    } else if (requestMethod === 'GET' && getParams && Object.keys(getParams).length > 0 && typeof getParams === 'object' && !Array.isArray(getParams)) {
-         // Handle case where getParams might be an object { key: value } instead of [{key:value}]
-         console.warn("GET params might be an object {key: value}, expecting array of objects [{key:value}]:", getParams);
-         const urlParams = new URLSearchParams();
-          for(const key in getParams) {
-               if (Object.hasOwnProperty.call(getParams, key)) {
-                   const value = getParams[key];
-                    if (value !== undefined && value !== null) { // Append if value is not null or undefined
-                         if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-                              urlParams.append(key, String(value));
-                        } else {
-                             console.warn(`Skipping non-primitive GET parameter "${key}" with value:`, value);
-                        }
-                    } else {
-                        console.warn(`Skipping null/undefined GET parameter "${key}".`);
-                    }
-               }
-          }
-           const queryString = urlParams.toString();
-         if (queryString) {
-            finalUrl += (finalUrl.includes('?') ? '&' : '?') + queryString;
-         }
-           console.log(`Constructed GET URL (from object): ${finalUrl}`);
     }
 
 
@@ -197,7 +194,7 @@ async function makeApiRequest(url, method, getParams = [], postBody, useLocalPro
                  // resulting from substitution.
                  fetchOptions.body = JSON.stringify(postBody);
                  fetchOptions.headers['Content-Type'] = 'application/json'; // Assume JSON body for POST
-                 console.log(`Constructed POST Body: ${fetchOptions.body}`);
+                 // console.log(`Constructed POST Body: ${fetchOptions.body}`); // Avoid excessive logging
             } catch (e) {
                  console.error("Error JSON stringifying POST body:", e);
                  throw new Error(`构建请求体失败: ${e.message}`);
@@ -211,7 +208,6 @@ async function makeApiRequest(url, method, getParams = [], postBody, useLocalPro
     }
 
     try {
-        console.log(`Executing API call to ${finalUrl}`);
         const response = await fetchMethod(finalUrl, fetchOptions);
 
         if (!response.ok) {
@@ -262,38 +258,32 @@ async function saveBlobToFile(blob, filePath) {
 
 /**
  * Processes the main audio request for a single conversation using a pre-built variables map.
- * This function does NOT handle the beforeurl logic or judge_repeat_before.
+ * This function does NOT handle the before_requests logic or judge_repeat_before check.
  * It constructs the variables map specific to the conversation, substitutes
  * variables in the *main* config parameters, makes the API call, and saves the audio.
+ * It reports its own success/failure status using the provided updateStatus callback.
  * @param {number} nameId - Character index + 1 (used to determine dataKey lookup).
  * @param {string} final_text - The processed text to synthesize.
- * @param {object} conversation - The current conversation object (includes emotion, storytext), used to derive dataKey and gptreturn.
+ * @param {object} conversation - The current conversation object (includes emotion, storytext, id).
  * @param {string} lang - Language code ('zh', 'en', 'ja'), used for language variable.
- * @param {string} outputName - The name for the output file (without extension).
  * @param {object} selectedConfigDefinition - The *unquoted* JSON definition for the selected config.
  * @param {object} configData - The user-entered data for the selected config (e.g., { "1_happy": { "filepath": "..." } }).
  * @param {string} audioDirectoryPath - The IndexedDB path to the audio directory.
- * @param {Function} updateStatus - Callback to update status specific to this main request.
- * @returns {Promise<string>} "ok" on success, "error" on failure.
+ * @param {Function} updateStatus - Callback to update the status message (for per-item status).
+ * @returns {Promise<{status: 'ok'|'error', reason?: string, conversationId: string|number}>} A result object.
  */
-async function processConversationAudioRequest(nameId, final_text, conversation, lang, outputName, selectedConfigDefinition, configData, audioDirectoryPath, updateStatus) {
-    updateStatus(`  - 生成音频 ${outputName}.wav ...`);
+async function processConversationAudioRequest(nameId, final_text, conversation, lang, selectedConfigDefinition, configData, audioDirectoryPath, updateStatus) {
+    const conversationId = conversation.id;
+    // console.log(`Processing main audio request for ID ${conversationId}`); // Avoid excessive logging
 
-    // 1. Prepare Variables Map for Substitution
-    // Note: This map should ideally be built *outside* this function in generateVoice
-    // and passed in, to ensure the *same* map is used for judge_repeat_before checks,
-    // before_requests substitution, and main request substitution.
-    // For now, replicate the logic here for clarity based on the original function's role,
-    // but acknowledge this map derivation is duplicated with generateVoice.
-
+    // 1. Prepare Variables Map for Substitution for THIS Conversation
     const variablesMap = {};
     variablesMap['text'] = final_text; // Cleaned text for {{text}}
-    variablesMap['language'] = lang;
-
+    variablesMap['language'] = lang; // Language variable
     // The {{gptreturn}} variable gets the raw emotion from the conversation
     const conversationEmotion = conversation?.["emotion"];
     variablesMap['gptreturn'] = conversationEmotion || '';
-    console.log(`Conversation Emotion (for {{gptreturn}} in main request): "${variablesMap['gptreturn']}"`);
+    // console.log(`Conversation Emotion (for {{gptreturn}} in main request) for ID ${conversationId}: "${variablesMap['gptreturn']}"`); // Avoid excessive logging
 
     // Determine the actual emotion used for the dataKey lookup based on emotion_list and emotion_feedback
     const hasEmotionsConfigured = Array.isArray(selectedConfigDefinition?.emotion_list) && selectedConfigDefinition.emotion_list.length > 0;
@@ -305,20 +295,20 @@ async function processConversationAudioRequest(nameId, final_text, conversation,
 
         // If conversation emotion is empty OR not found in the list
         if (effectiveEmotion === '' || !emotionList.includes(effectiveEmotion)) {
-            console.log(`Conversation emotion "${conversationEmotion || 'empty'}" not found in configured emotion_list. Trying emotion_feedback.`);
+            // console.log(`Conversation emotion "${conversationEmotion || 'empty'}" not found in configured emotion_list. Trying emotion_feedback.`); // Avoid excessive logging
             // If not found/empty, try using emotion_feedback
             const feedbackEmotion = selectedConfigDefinition?.emotion_feedback;
 
             // Check if feedbackEmotion exists, is a non-empty string, AND is in the configured list
              if (typeof feedbackEmotion === 'string' && feedbackEmotion !== '' && emotionList.includes(feedbackEmotion)) {
-                 console.log(`Using valid emotion_feedback "${feedbackEmotion}" as fallback for data key.`);
+                 // console.log(`Using valid emotion_feedback "${feedbackEmotion}" as fallback for data key.`); // Avoid excessive logging
                  effectiveEmotion = feedbackEmotion; // Use feedback as the emotion for the key
              } else {
-                  console.warn(`Invalid or empty emotion_feedback "${feedbackEmotion}" or feedback emotion not in configured emotion_list. Falling back to index-only key if conversation emotion was invalid.`);
+                  console.warn(`Invalid or empty emotion_feedback "${feedbackEmotion}" or feedback emotion not in configured emotion_list for ID ${conversationId}. Falling back to index-only key if conversation emotion was invalid.`);
                   // effectiveEmotion remains the empty string it was initialized with from `conversationEmotion || ''`.
              }
         } else {
-             console.log(`Using conversation emotion "${effectiveEmotion}" for data key lookup.`);
+             // console.log(`Using conversation emotion "${effectiveEmotion}" for data key lookup.`); // Avoid excessive logging
             // effectiveEmotion is already the valid conversation emotion
         }
          // Assign the determined effectiveEmotion to emotionUsedForKey
@@ -326,14 +316,15 @@ async function processConversationAudioRequest(nameId, final_text, conversation,
     } else {
         // If no emotion_list is defined, emotions are not configured for keys.
         // emotionUsedForKey remains '' (default).
-        console.log("emotion_list is not configured. Using index-only data key for main request.");
+        // console.log("emotion_list is not configured. Using index-only data key for main request for ID ${conversationId}."); // Avoid excessive logging
     }
     // Construct the dataKey (e.g., "1" or "1_happy")
     // Only append emotion if hasEmotionsConfigured is true AND a non-empty emotionUsedForKey was determined.
+    // Remember data index is 1-based (placeId)
     const dataKey = hasEmotionsConfigured && emotionUsedForKey ? `${nameId}_${emotionUsedForKey}` : `${nameId}`;
     const rowData = configData?.[dataKey] || {}; // Get the data for this specific row/emotion key
 
-    console.log(`Looking up config data for main request using key: "${dataKey}"`);
+    // console.log(`Looking up config data for main request for ID ${conversationId} using key: "${dataKey}"`); // Avoid excessive logging
     // console.log("Data found for dataKey:", rowData); // Avoid excessive logging
 
     // Add values from required_item in configData to the variables map
@@ -355,7 +346,7 @@ async function processConversationAudioRequest(nameId, final_text, conversation,
          }
     });
 
-    console.log("Final variables for main audio request substitution:", variablesMap);
+    // console.log(`Final variables for main audio request substitution for ID ${conversationId}:`, variablesMap); // Avoid excessive logging
 
     // 2. Substitute Variables in Main Config Parameters
     const mainUrlDetails = {
@@ -371,8 +362,8 @@ async function processConversationAudioRequest(nameId, final_text, conversation,
     const useLocalProxy = configData?.useLocalProxy === true;
 
     // 4. Make the Main API Call
+    const outputPath = `${audioDirectoryPath}/${conversationId}.wav`;
     try {
-        console.log(`Making main request to: ${substitutedMainUrlDetails.url}`);
         const response = await makeApiRequest(
             substitutedMainUrlDetails.url,
             substitutedMainUrlDetails.requestmethod,
@@ -387,27 +378,27 @@ async function processConversationAudioRequest(nameId, final_text, conversation,
 
         // Basic check for binary data
         if (audioBlob.size === 0) {
-             const errorMsg = `API返回的音频 Blob 为空 for ${outputName}.wav.`;
-             console.warn(errorMsg);
-             throw new Error(errorMsg + " 请检查API响应或配置。");
+             const errorMsg = `API返回的音频 Blob 为空`;
+             console.warn(`${errorMsg} for ID ${conversationId}.wav`);
+             throw new Error(errorMsg + "。请检查API响应或配置。");
         }
         if (!audioBlob.type.startsWith('audio/') && audioBlob.type !== '' && audioBlob.type !== 'application/json') { // Allow empty type, or application/json if API indicates error via JSON
-             console.warn(`警告: API返回 Blob 类型 "${audioBlob.type}" for ${outputName}.wav，可能不是音频.`);
+             console.warn(`警告: API返回 Blob 类型 "${audioBlob.type}" for ID ${conversationId}.wav，可能不是音频.`);
              // Consider if 'application/json' response should be treated as an error here if expecting audio
         }
 
         // Save the Blob to IndexedDB
-        const outputPath = `${audioDirectoryPath}/${outputName}.wav`;
         await saveBlobToFile(audioBlob, outputPath);
-        updateStatus(`  - 音频 ${outputName}.wav 保存成功`);
-
-        return "ok";
+        // updateStatus(`  - 音频 ID ${conversationId}.wav 保存成功`); // Status handled by main loop aggregation
+        updateStatus(`语音处理ID ${conversationId} 成功`);
+        return { status: 'ok', conversationId };
 
     } catch (e) {
-        console.error(`Error during main API call or file saving for ${outputName}:`, e);
+        const reason = e.message || '未知错误';
+        console.error(`Error during main API call or file saving for ID ${conversationId}:`, e);
         // The specific error message from makeApiRequest or saveBlobToFile is in e.message
-        updateStatus(`  - 音频 ${outputName}.wav 生成失败: ${e.message}`);
-        return "error"; // Indicate failure
+        updateStatus(`语音处理ID ${conversationId} 失败 原因：${reason}`);
+        return { status: 'error', reason: reason, conversationId }; // Indicate failure with reason
     }
 }
 
@@ -416,17 +407,19 @@ async function processConversationAudioRequest(nameId, final_text, conversation,
 
 /**
  * Generates voice audio files for a given story ID using the selected configuration.
- * This function orchestrates the process, including before_requests calls and judge_repeat_before logic.
+ * This function orchestrates the process, including before_requests calls with shared state,
+ * file existence checks, text processing, concurrency management, and status updates.
  * @param {string|number} storyId - The ID of the story segment.
  * @param {Function} updateStatus - Callback function to update the status message.
- * @returns {Promise<string>} "ok" on success, an error message string on failure.
+ * @returns {Promise<string>} "ok" on success, an error message string on failure that stopped the process, or a summary message if some tasks failed.
  */
 async function generateVoice(storyId, updateStatus = console.log) {
-    updateStatus(`开始生成故事 ${storyId} 的语音...`);
+    updateStatus("开始生成语音"); // Initial status update
+
     const fullConfig = loadFullConfig();
 
     if (!fullConfig) {
-        const errorMsg = "生成语音失败：无法加载主配置。";
+        const errorMsg = "语音生成失败：无法加载主配置。";
         updateStatus(errorMsg);
         return errorMsg;
     }
@@ -434,21 +427,21 @@ async function generateVoice(storyId, updateStatus = console.log) {
     // --- Get Selected Configuration ---
     const sovitsRoot = fullConfig[SOVITS_KEY];
     if (!sovitsRoot) {
-        const errorMsg = `生成语音失败：配置中缺少 '${SOVITS_KEY}' 部分。`;
+        const errorMsg = `语音生成失败：配置中缺少 '${SOVITS_KEY}' 部分。`;
         updateStatus(errorMsg);
         return errorMsg;
     }
 
     const selectedConfigName = sovitsRoot[SELECTED_MODEL_KEY];
     if (!selectedConfigName) {
-        const errorMsg = `生成语音失败：未在配置中找到选定的模型 ('${SELECTED_MODEL_KEY}')。请在配置页面选择一个配置。`;
+        const errorMsg = `语音生成失败：未在配置中找到选定的模型 ('${SELECTED_MODEL_KEY}')。请在配置页面选择一个配置。`;
         updateStatus(errorMsg);
         return errorMsg;
     }
 
     const configDefinitions = sovitsRoot[CONFIG_DEFINITIONS_KEY];
     if (!configDefinitions || !configDefinitions[selectedConfigName]) {
-        const errorMsg = `生成语音失败：找不到名为 "${selectedConfigName}" 的配置定义。`;
+        const errorMsg = `语音生成失败：找不到名为 "${selectedConfigName}" 的配置定义。`;
         updateStatus(errorMsg);
         return errorMsg;
     }
@@ -457,9 +450,10 @@ async function generateVoice(storyId, updateStatus = console.log) {
     let selectedConfigDefinition;
     try {
         selectedConfigDefinition = unquoteVariablesDeep(configDefinitions[selectedConfigName]);
-        console.log("Using configuration definition:", selectedConfigName, selectedConfigDefinition);
+        console.log(`Using configuration definition "${selectedConfigName}"`);
+        // console.log(selectedConfigDefinition); // Avoid excessive logging
     } catch(e) {
-        const errorMsg = `生成语音失败：解析或处理配置 "${selectedConfigName}" 定义时出错: ${e.message}`;
+        const errorMsg = `语音生成失败：解析或处理配置 "${selectedConfigName}" 定义时出错: ${e.message}`;
         updateStatus(errorMsg);
         console.error(errorMsg, configDefinitions[selectedConfigName]); // Log the raw definition
         return errorMsg;
@@ -475,7 +469,7 @@ async function generateVoice(storyId, updateStatus = console.log) {
 
     const storyTitle = fullConfig.剧情?.story_title;
     if (!storyTitle) {
-         const errorMsg = "生成语音失败：配置中 '剧情.story_title' 未设置。";
+         const errorMsg = "语音生成失败：配置中 '剧情.story_title' 未设置。";
          updateStatus(errorMsg);
          return errorMsg;
     }
@@ -497,8 +491,53 @@ async function generateVoice(storyId, updateStatus = console.log) {
     const storyFilePath = `${baseDataDir}/story/${storyId}.json`;
     const characterFilePath = `${baseDataDir}/character.json`;
 
+
+    // Read story and character data
+    let storyData;
+    let characterData;
+
+    // updateStatus(`读取故事文件: ${storyFilePath}`); // Status format change, remove this
+    try {
+        storyData = await readFile(storyFilePath);
+         console.log(`Story file read: ${storyFilePath}`);
+    } catch (e) {
+        const errorMsg = `语音生成失败：读取故事文件失败: ${storyFilePath}. 错误: ${e.message}`;
+        updateStatus(errorMsg);
+        return errorMsg;
+    }
+
+    // updateStatus(`读取角色文件: ${characterFilePath}`); // Status format change, remove this
+    try {
+        characterData = await readFile(characterFilePath);
+        console.log(`Character file read: ${characterFilePath}`);
+    } catch (e) {
+        const errorMsg = `语音生成失败：读取角色文件失败: ${characterFilePath}. 错误: ${e.message}`;
+        updateStatus(errorMsg);
+        return errorMsg;
+    }
+
+    if (!storyData || !Array.isArray(storyData.conversations)) {
+        const errorMsg = `语音生成失败：故事数据无效或缺少 'conversations' 列表在 ${storyFilePath}`;
+        updateStatus(errorMsg);
+        return errorMsg;
+    }
+    if (!characterData || !Array.isArray(characterData)) {
+        const errorMsg = `语音生成失败：角色数据无效或不是数组在 ${characterFilePath}`;
+        updateStatus(errorMsg);
+        return errorMsg;
+    }
+
+    const conversations = storyData.conversations;
+
+    if (conversations.length === 0) {
+         const message = `语音生成结束，成功数：0/失败数：0/跳过数：0`; // No conversations to start with
+         updateStatus(message);
+         console.log(`Story ${storyId} has no conversations.`);
+         return "ok"; // Or a specific code for "nothing to process"? "ok" implies no errors occurred.
+    }
+
     // Ensure audio directory exists
-    updateStatus(`确保音频目录存在: ${audioDirectoryPath}`);
+    // updateStatus(`确保音频目录存在: ${audioDirectoryPath}`); // Status format change, remove this
     try {
         await createFolder(audioDirectoryPath);
          console.log(`Audio directory ensured: ${audioDirectoryPath}`);
@@ -509,297 +548,344 @@ async function generateVoice(storyId, updateStatus = console.log) {
         }
     }
 
-    // Read story and character data
-    let storyData;
-    let characterData;
 
-    updateStatus(`读取故事文件: ${storyFilePath}`);
-    try {
-        storyData = await readFile(storyFilePath);
-         console.log(`Story file read: ${storyFilePath}`);
-    } catch (e) {
-        const errorMsg = `读取故事文件失败: ${storyFilePath}. 错误: ${e.message}`;
-        updateStatus(errorMsg);
-        return errorMsg;
-    }
+    let skippedCount = 0;
+    // Array to hold conversations that actually need processing (after initial checks)
+    const conversationsToProcessFiltered = [];
 
-    updateStatus(`读取角色文件: ${characterFilePath}`);
-    try {
-        characterData = await readFile(characterFilePath);
-        console.log(`Character file read: ${characterFilePath}`);
-    } catch (e) {
-        const errorMsg = `读取角色文件失败: ${characterFilePath}. 错误: ${e.message}`;
-        updateStatus(errorMsg);
-        return errorMsg;
-    }
+    // --- Initial Filtering and Skipping (Sequential - checks file existence, character, text) ---
+    // This is done sequentially before starting concurrent tasks.
+    for (const conversation of conversations) {
+        const conversationId = conversation.id;
+        const characterName = conversation.character;
+        const storyText = conversation.text; // Use this for cleaning
+         const outputPath = `${audioDirectoryPath}/${conversationId}.wav`;
 
-    if (!storyData || !Array.isArray(storyData.conversations)) {
-        const errorMsg = `故事数据无效或缺少 'conversations' 列表在 ${storyFilePath}`;
-        updateStatus(errorMsg);
-        return errorMsg;
-    }
-    if (!characterData || !Array.isArray(characterData)) {
-        const errorMsg = `角色数据无效或不是数组在 ${characterFilePath}`;
-        updateStatus(errorMsg);
-        return errorMsg;
-    }
-
-    const conversationsToProcess = storyData.conversations;
-
-    if (conversationsToProcess.length === 0) {
-         const message = `故事 ${storyId} 中没有找到对话需要生成音频。`;
-         updateStatus(message);
-         console.log(message);
-         return "ok";
-    }
-
-    // --- Before Requests Setup ---
-    // before_requests is an array of request definitions
-    const beforeRequestsDefinitions = selectedConfigDefinition?.before_requests; // Can be null, undefined, or []
-
-    let judgeRepeatVariableName = null;
-    const judgeRepeatBeforeConfig = selectedConfigDefinition?.judge_repeat_before;
-
-    if (judgeRepeatBeforeConfig && typeof judgeRepeatBeforeConfig === 'string' && judgeRepeatBeforeConfig.trim() !== '') {
-         // Expects format "{{variableName}}"
-         const variableMatch = judgeRepeatBeforeConfig.match(/^\{\{\s*(\w+)\s*\}\}$/);
-         if (variableMatch) {
-             judgeRepeatVariableName = variableMatch[1];
-             console.log(`judge_repeat_before variable identified: {{${judgeRepeatVariableName}}}`);
-         } else {
-             console.warn(`Invalid judge_repeat_before format: "${judgeRepeatBeforeConfig}". It will be ignored and before_requests will always run (if defined).`);
-         }
-    } else {
-        console.log("judge_repeat_before is not configured or empty. Before requests will run every time if before_requests array is defined and not empty.");
-    }
-
-    // State for judge_repeat_before logic
-    // Use a unique symbol or object to ensure the first evaluated value is always considered 'different' from the initial state.
-    let lastJudgeRepeatValue = Symbol('initial_judge_repeat_value');
-    const useLocalProxy = configData?.useLocalProxy === true;
-    // --- End Before Requests Setup ---
-
-
-    updateStatus(`开始处理 ${conversationsToProcess.length} 个对话 (使用配置: ${selectedConfigName})...`);
-
-    let processedCount = 0; // Count successfully processed audios (main requests)
-    let skippedCount = 0; // Count skipped audios (already exist)
-    let errorCount = 0; // Count main request errors
-
-    for (let i = 0; i < conversationsToProcess.length; i++) {
-        const conversation = conversationsToProcess[i];
-        const characterName = conversation["character"];
-        const storyText = conversation["text"]; // Use this for cleaning
-        const conversationId = conversation["id"];
-
-        updateStatus(`处理 ID ${conversationId} (${i + 1}/${conversationsToProcess.length}) 角色: ${characterName || '旁白/无'}`);
-
-        // --- Check if audio exists ---
-        const outputPath = `${audioDirectoryPath}/${conversationId}.wav`;
-        const metadata = await getMetadata(outputPath).catch(() => ({ exists: false }));
+         // Check if audio exists FIRST, as it's the most common skip case
+         const metadata = await getMetadata(outputPath).catch(() => ({ exists: false }));
         if (metadata.exists) {
-            console.log(`ID ${conversationId}: 音频文件已存在，跳过生成。`);
-            updateStatus(`  - 跳过 ID ${conversationId}: 文件已存在`);
-            skippedCount++;
-            continue; // Skip to next conversation
+             console.log(`ID ${conversationId}: 音频文件已存在，跳过生成。`);
+             updateStatus(`语音处理ID ${conversationId} 跳过 原因：文件已存在`);
+             skippedCount++;
+             continue; // Skip this conversation
         }
-        // ---------------------------
 
         if (!characterName) {
             console.log(`ID ${conversationId}: 角色名为空，跳过。`);
-            updateStatus(`  - 跳过 ID ${conversationId}: 角色名为空`);
+            updateStatus(`语音处理ID ${conversationId} 跳过 原因：角色名为空`);
             skippedCount++;
             continue;
         }
 
-        // --- Text Processing ---
-        // Remove content within parentheses/brackets and replace spaces/newlines
-        // More brackets: (), （）, [], 【】, {}, 『』, <>
-        const textReplaced = (storyText || '').replace(/[\(（].*?[\)）]/g, '').replace(/ /g, "，").replace(/\n/g, "。"); // Remove various brackets and content inside
-         // Trim leading/trailing commas and periods (handles cases where text starts/ends with brackets/newlines)
-         let final_text = textReplaced.replace(/^[,。]+|[,。]+$/g, ''); // Trim leading/trailing
-         // Ensure minimum text length or presence after processing
-         if (!final_text.trim()) {
-            console.log(`ID ${conversationId}: 文本处理后为空，跳过。`);
-            updateStatus(`  - 跳过 ID ${conversationId}: 文本为空`);
-            skippedCount++;
-            continue;
-        }
-        // -----------------------
+        // Basic text processing - remove content in various brackets and replace spaces/newlines
+        // () , （） , [] , 【】 , {} , 『』 , <>
+        const textReplaced = (storyText || '').replace(/[\(（\[【\{『<\s\S]*?[\)）\]】\}』>]/g, '').replace(/ /g, "，").replace(/\n/g, "。");
+        // Trim leading/trailing commas and periods (handles cases where text starts/ends with brackets/newlines)
+        let final_text = textReplaced.replace(/^[,。]+|[,。]+$/g, '');
+        // Ensure minimum text length or presence after processing
+        if (!final_text.trim()) {
+           console.log(`ID ${conversationId}: 文本处理后为空，跳过。`);
+           updateStatus(`语音处理ID ${conversationId} 跳过 原因：文本为空`);
+           skippedCount++;
+           continue;
+       }
 
-        // --- Find Character ID (for dataKey) ---
+        // If it passed all initial checks, add to the list for potential concurrent processing
+        // We also need the character's placeId for the dataKey lookup later
         let placeId = -1;
         const character = characterData.find(char => char.name === characterName);
         if (character) {
             placeId = characterData.indexOf(character) + 1; // JSON indices start from 1
         } else {
-            placeId=7;
+            placeId = 7; // Default fallback
         }
-        // -----------------------
+        conversationsToProcessFiltered.push({ conversation, final_text, placeId }); // Store original conversation, processed text, and placeId
+    }
+    // --- End Initial Filtering ---
+    updateStatus(`语音待生成数：${conversationsToProcessFiltered.length}`);
+    if (conversationsToProcessFiltered.length === 0) {
+        // All conversations were either non-existent or skipped in the initial pass
+        const finalMessage = `语音生成结束，成功数：0/失败数：0/跳过数：${skippedCount}`;
+        updateStatus(finalMessage);
+        console.log(`All conversations for story ${storyId} were filtered out or skipped.`);
+        return "ok"; // No errors occurred, just nothing needed processing
+    }
 
-        // --- Prepare Variables Map for This Conversation ---
-        // This map is needed for both before_requests and main url substitutions for this specific conversation
-        const conversationVariablesMap = {};
-        conversationVariablesMap['text'] = final_text; // Cleaned text for {{text}}
-        conversationVariablesMap['language'] = lang; // Language variable
-        // The {{gptreturn}} variable gets the raw emotion from the conversation
-        conversationVariablesMap['gptreturn'] = conversation?.["emotion"] || ''; // Use the emotion from the story data
+    // --- Before Requests Logic (Batch Level Check and Execution) ---
+    // Determine if before_requests should run based on judge_repeat_before variable value
+    const beforeRequestsDefinitions = selectedConfigDefinition?.before_requests; // Can be null, undefined, or []
+    const judgeRepeatBeforeConfig = selectedConfigDefinition?.judge_repeat_before;
 
-        // Add values from required_item in configData based on character ID (placeId) and emotion
-        const hasEmotionsConfigured = Array.isArray(selectedConfigDefinition?.emotion_list) && selectedConfigDefinition.emotion_list.length > 0;
-        let emotionUsedForKey = '';
-        if (hasEmotionsConfigured) {
-             const emotionList = selectedConfigDefinition.emotion_list || [];
-             let effectiveEmotion = conversationVariablesMap['gptreturn']; // Start with gptreturn value
+    let judgeRepeatVariableName = null;
+    let currentJudgeRepeatValue = null; // Value derived from the *first* conversation needing processing
+    let needsBeforeRequestsCall = true; // Default to true
 
-             if (effectiveEmotion === '' || !emotionList.includes(effectiveEmotion)) {
-                 const feedbackEmotion = selectedConfigDefinition?.emotion_feedback;
-                 if (typeof feedbackEmotion === 'string' && feedbackEmotion !== '' && emotionList.includes(feedbackEmotion)) {
-                     effectiveEmotion = feedbackEmotion;
-                 }
-             }
-             emotionUsedForKey = effectiveEmotion;
-        }
-        // Construct the dataKey (e.g., "1" or "1_happy") for looking up user data
-        // Remember user data index is 1-based, emotions are optional part of the key
-        const dataKey = hasEmotionsConfigured && emotionUsedForKey ? `${placeId}_${emotionUsedForKey}` : `${placeId}`;
-        const rowData = configData?.[dataKey] || {};
+    // Only proceed with judge_repeat logic if 'allow_concurrency' is true AND judge_repeat_before is configured
+    if (selectedConfigDefinition?.allow_concurrency === true && judgeRepeatBeforeConfig && typeof judgeRepeatBeforeConfig === 'string' && judgeRepeatBeforeConfig.trim() !== '') {
+         const variableMatch = judgeRepeatBeforeConfig.match(/^\{\{\s*(\w+)\s*\}\}$/);
+         if (variableMatch) {
+              judgeRepeatVariableName = variableMatch[1];
+              console.log(`judge_repeat_before variable identified: {{${judgeRepeatVariableName}}}`);
 
-        (selectedConfigDefinition?.required_item || []).forEach(item => {
-            const itemKey = Object.keys(item)[0];
-             const valueFromData = rowData[itemKey];
-             const itemDefault = item[itemKey];
-             // Prioritize user data value, then default from definition (if primitive), then empty string
-             if (valueFromData !== undefined && valueFromData !== null && valueFromData !== '') {
-                 conversationVariablesMap[itemKey] = valueFromData;
-             } else if (typeof itemDefault === 'string' || typeof itemDefault === 'number' || typeof itemDefault === 'boolean') {
-                 conversationVariablesMap[itemKey] = itemDefault;
-             } else {
-                  conversationVariablesMap[itemKey] = ''; // Default to empty string for variables if no user data or primitive default
-             }
-        });
-        // --- End Variables Map Preparation ---
+              // *** Derive currentJudgeRepeatValue from the FIRST conversation that needs processing ***
+              const firstConvItem = conversationsToProcessFiltered[0];
+              const firstConv = firstConvItem.conversation;
+              const firstConvPlaceId = firstConvItem.placeId; // Use the already determined placeId
 
+              // Build variables map for the first conversation (logic similar to pCAR)
+              const firstConvVariablesMap = {};
+              firstConvVariablesMap['text'] = firstConvItem.final_text; // Use processed text
+              firstConvVariablesMap['language'] = lang;
+              firstConvVariablesMap['gptreturn'] = firstConv?.emotion || ''; // Raw emotion from story data
 
-        // --- Handle Before Requests Array ---
-        if (Array.isArray(beforeRequestsDefinitions) && beforeRequestsDefinitions.length > 0) {
-             let currentJudgeRepeatValue = null;
-             let needsBeforeRequestsCall = true; // Default to true if no judge_repeat_before or variable value
-
-             if (judgeRepeatVariableName) {
-                 // Get the current value of the judge_repeat_before variable for this conversation
-                 // Note: variablesMap is built using data from index `placeId` and emotion `emotionUsedForKey`
-                 currentJudgeRepeatValue = conversationVariablesMap[judgeRepeatVariableName]; // Could be undefined if variable key doesn't exist in map
-                 console.log(`Judge repeat variable {{${judgeRepeatVariableName}}} value for ID ${conversationId}: "${currentJudgeRepeatValue}"`);
-                 console.log(`Last judge repeat value: "${lastJudgeRepeatValue}"`);
-
-                 // Determine if the call is needed: needed if current value is DIFFERENT from the last successful value.
-                 // The initial state (Symbol) ensures the first call is always needed if judgeRepeatVariableName is set.
-                 // Compare using strict inequality (===) to handle null, undefined, "", 0, false distinctly if they are valid variable values.
-                 needsBeforeRequestsCall = currentJudgeRepeatValue !== lastJudgeRepeatValue;
-             } else {
-                 // If judge_repeat_before is not configured or invalid format, always call before_requests if array is defined and not empty
-                 needsBeforeRequestsCall = true;
-             }
-
-            if (needsBeforeRequestsCall) {
-                updateStatus(`  - 正在进行前置请求 (ID ${conversationId}, 共 ${beforeRequestsDefinitions.length} 个)...`);
-                 try {
-                     // Execute each request in the before_requests array sequentially
-                     for (let j = 0; j < beforeRequestsDefinitions.length; j++) {
-                         const beforeReqDef = beforeRequestsDefinitions[j];
-                          if (!beforeReqDef || typeof beforeReqDef !== 'object' || !beforeReqDef.url) {
-                             console.warn(`Skipping invalid before_request definition at index ${j} for ID ${conversationId}:`, beforeReqDef);
-                             updateStatus(`  - 跳过无效前置请求 ${j+1} (ID ${conversationId})`);
-                             continue; // Skip invalid entries in the array
+              const hasEmotionsConfigured = Array.isArray(selectedConfigDefinition?.emotion_list) && selectedConfigDefinition.emotion_list.length > 0;
+              let firstConvEmotionUsedForKey = '';
+               if (hasEmotionsConfigured) {
+                    const emotionList = selectedConfigDefinition.emotion_list || [];
+                    let effectiveEmotion = firstConvVariablesMap['gptreturn']; // Start with gptreturn value
+                    if (effectiveEmotion === '' || !emotionList.includes(effectiveEmotion)) {
+                        const feedbackEmotion = selectedConfigDefinition?.emotion_feedback;
+                         if (typeof feedbackEmotion === 'string' && feedbackEmotion !== '' && emotionList.includes(feedbackEmotion)) {
+                            effectiveEmotion = feedbackEmotion;
                          }
+                    }
+                    firstConvEmotionUsedForKey = effectiveEmotion;
+               }
 
-                         const beforeReqDetails = {
-                             url: beforeReqDef.url,
-                             requestmethod: beforeReqDef.requestmethod || 'GET', // Default to GET if not specified
-                             getparams: beforeReqDef.getparams || [], // Default to empty array
-                             body: beforeReqDef.body, // Can be undefined, null, or any value
-                         };
+              const firstConvDataKey = hasEmotionsConfigured && firstConvEmotionUsedForKey ? `${firstConvPlaceId}_${firstConvEmotionUsedForKey}` : `${firstConvPlaceId}`;
+              const firstConvRowData = configData?.[firstConvDataKey] || {};
 
-                         // Substitute variables in before request details using the *current conversation's* variables map
-                         const substitutedBeforeReqDetails = substituteVariables(beforeReqDetails, conversationVariablesMap);
-                         console.log(`Substituted Before Request ${j + 1} details for ID ${conversationId}:`, substitutedBeforeReqDetails);
+               (selectedConfigDefinition?.required_item || []).forEach(item => {
+                  const itemKey = Object.keys(item)[0];
+                  const valueFromData = firstConvRowData[itemKey];
+                   const itemDefault = item[itemKey];
+                   if (valueFromData !== undefined && valueFromData !== null && valueFromData !== '') {
+                      firstConvVariablesMap[itemKey] = valueFromData;
+                  } else if (typeof itemDefault === 'string' || typeof itemDefault === 'number' || typeof itemDefault === 'boolean') {
+                      firstConvVariablesMap[itemKey] = itemDefault;
+                  } else {
+                       firstConvVariablesMap[itemKey] = '';
+                  }
+               });
 
-                         // Make the before request call
-                         updateStatus(`  - 执行前置请求 ${j+1}/${beforeRequestsDefinitions.length}: ${substitutedBeforeReqDetails.url}`);
-                         await makeApiRequest(
-                             substitutedBeforeReqDetails.url,
-                             substitutedBeforeReqDetails.requestmethod, // Use the determined method (default GET)
-                             substitutedBeforeReqDetails.getparams,
-                             substitutedBeforeReqDetails.body,
-                             useLocalProxy
-                             // makeApiRequest logs errors internally, which will be caught here
-                         );
-                         console.log(`Before Request ${j + 1} successful for ID ${conversationId}.`);
-                         updateStatus(`  - 前置请求 ${j+1} 成功 (ID ${conversationId}).`);
+              // Get the variable value from the map
+              currentJudgeRepeatValue = firstConvVariablesMap[judgeRepeatVariableName];
+              console.log(`Derived judge_repeat_before value for the batch (from first item needing processing, ID ${firstConv.id}): "${currentJudgeRepeatValue}"`);
+              console.log(`Global last judge repeat value: "${String(lastJudgeRepeatValue)}"`); // Convert Symbol to string for logging
 
-                     } // End loop through before_requests array
+              // Determine if BEFORE requests are needed: only if current value is DIFFERENT from the last successful value.
+              // The initial Symbol value ensures the first run always needs the call.
+              needsBeforeRequestsCall = currentJudgeRepeatValue !== lastJudgeRepeatValue;
 
-                     updateStatus(`  - 所有前置请求成功 (ID ${conversationId}).`);
-                     console.log(`All before requests successful for ID ${conversationId}.`);
+              if (!Array.isArray(beforeRequestsDefinitions) || beforeRequestsDefinitions.length === 0) {
+                  console.log("judge_repeat_before is configured, but before_requests array is empty. Skipping before requests logic.");
+                  needsBeforeRequestsCall = false; // No requests to make anyway
+              }
 
-                     // Update the last successful judge repeat value IF the calls were made based on the variable
-                     if (judgeRepeatVariableName) {
-                          lastJudgeRepeatValue = currentJudgeRepeatValue;
-                          console.log(`Updated last judge repeat value to: "${lastJudgeRepeatValue}"`);
-                     }
 
-                 } catch (beforeError) {
-                     console.error(`前置请求失败 (ID ${conversationId}):`, beforeError);
-                     const errorMsg = `生成语音失败: ID ${conversationId} 前置请求失败: ${beforeError.message}`;
-                     updateStatus(errorMsg);
-                     errorCount++; // Count the error (although we are stopping the process)
-                     // If any before request fails, stop the entire generation process for this story ID.
-                     return errorMsg; // Stop the whole process and return the error message
+         } else {
+              console.warn(`judge_repeat_before is configured but format is invalid ("${judgeRepeatBeforeConfig}") or allow_concurrency is false. judge_repeat logic will be ignored. Before requests will run every time if defined and not empty.`);
+         }
+    } else {
+         console.log("judge_repeat_before is not configured or allow_concurrency is false. Before requests will run every time if defined and not empty.");
+    }
+
+    // If beforeRequestsDefinitions is not an array or is empty, we don't run them anyway, so needsBeforeRequestsCall is false implicitly.
+    if (!Array.isArray(beforeRequestsDefinitions) || beforeRequestsDefinitions.length === 0) {
+         needsBeforeRequestsCall = false; // Explicitly set to false if there are no requests defined
+    }
+
+
+    const useLocalProxy = configData?.useLocalProxy === true;
+
+    if (needsBeforeRequestsCall) {
+        updateStatus(`语音信息：执行前置请求 (共 ${beforeRequestsDefinitions.length} 个)...`);
+        try {
+             // Execute each request in the before_requests array sequentially *before* starting concurrent tasks.
+             // The variables for the before requests are derived from the *first* conversation that needs processing.
+             // If before_requests need variables that change per conversation, this batch approach won't work.
+             // This assumes before_requests are setup/auth calls depending on a shared variable like model name.
+             const firstConvItem = conversationsToProcessFiltered[0]; // Guaranteed to exist if needsBeforeRequestsCall is true and list > 0
+             const firstConv = firstConvItem.conversation;
+             const firstConvPlaceId = firstConvItem.placeId;
+
+             // Rebuild variables map for the first conversation for use in before_requests substitution
+             const firstConvVariablesMap = {};
+             firstConvVariablesMap['text'] = firstConvItem.final_text;
+             firstConvVariablesMap['language'] = lang;
+             firstConvVariablesMap['gptreturn'] = firstConv?.emotion || '';
+
+             const hasEmotionsConfigured = Array.isArray(selectedConfigDefinition?.emotion_list) && selectedConfigDefinition.emotion_list.length > 0;
+             let firstConvEmotionUsedForKey = '';
+              if (hasEmotionsConfigured) {
+                   const emotionList = selectedConfigDefinition.emotion_list || [];
+                   let effectiveEmotion = firstConvVariablesMap['gptreturn'];
+                   if (effectiveEmotion === '' || !emotionList.includes(effectiveEmotion)) {
+                       const feedbackEmotion = selectedConfigDefinition?.emotion_feedback;
+                        if (typeof feedbackEmotion === 'string' && feedbackEmotion !== '' && emotionList.includes(feedbackEmotion)) {
+                           effectiveEmotion = feedbackEmotion;
+                        }
+                   }
+                   firstConvEmotionUsedForKey = effectiveEmotion;
+              }
+
+             const firstConvDataKey = hasEmotionsConfigured && firstConvEmotionUsedForKey ? `${firstConvPlaceId}_${firstConvEmotionUsedForKey}` : `${firstConvPlaceId}`;
+             const firstConvRowData = configData?.[firstConvDataKey] || {};
+
+              (selectedConfigDefinition?.required_item || []).forEach(item => {
+                 const itemKey = Object.keys(item)[0];
+                 const valueFromData = firstConvRowData[itemKey];
+                  const itemDefault = item[itemKey];
+                  if (valueFromData !== undefined && valueFromData !== null && valueFromData !== '') {
+                     firstConvVariablesMap[itemKey] = valueFromData;
+                 } else if (typeof itemDefault === 'string' || typeof itemDefault === 'number' || typeof itemDefault === 'boolean') {
+                     firstConvVariablesMap[itemKey] = itemDefault;
+                 } else {
+                      firstConvVariablesMap[itemKey] = '';
                  }
-            } else {
-                updateStatus(`  - 跳过前置请求 (ID ${conversationId}): judge_repeat_before 值未改变.`);
-                 console.log(`Skipping before requests for ID ${conversationId} as judge_repeat_before value is unchanged.`);
-            }
-        } else {
-             console.log(`No before_requests configured or array is empty for config "${selectedConfigName}". Skipping before requests logic.`);
+              });
+
+
+             for (let j = 0; j < beforeRequestsDefinitions.length; j++) {
+                 const beforeReqDef = beforeRequestsDefinitions[j];
+                  if (!beforeReqDef || typeof beforeReqDef !== 'object' || !beforeReqDef.url) {
+                     console.warn(`Skipping invalid before_request definition at index ${j}:`, beforeReqDef);
+                     updateStatus(`语音信息：  - 跳过无效前置请求 ${j+1}`);
+                     continue; // Skip invalid entries
+                 }
+
+                 const beforeReqDetails = {
+                     url: beforeReqDef.url,
+                     requestmethod: beforeReqDef.requestmethod || 'GET', // Default to GET
+                     getparams: beforeReqDef.getparams || [],
+                     body: beforeReqDef.body,
+                 };
+
+                 // Substitute variables in before request details using the *first conversation's variables map*
+                 const substitutedBeforeReqDetails = substituteVariables(beforeReqDetails, firstConvVariablesMap);
+
+                 updateStatus(`语音信息：  - 执行前置请求 ${j+1}/${beforeRequestsDefinitions.length}: ${substitutedBeforeReqDetails.url}`);
+                 await makeApiRequest(
+                     substitutedBeforeReqDetails.url,
+                     substitutedBeforeReqDetails.requestmethod.toUpperCase(),
+                     substitutedBeforeReqDetails.getparams,
+                     substitutedBeforeReqDetails.body,
+                     useLocalProxy
+                 );
+                 updateStatus(`语音信息：  - 前置请求 ${j+1} 成功`);
+             }
+             updateStatus(`语音信息：所有前置请求成功`);
+
+            // Update the global state ONLY if before requests were successfully executed
+            // AND if judge_repeat_before logic was active (judgeRepeatVariableName is not null)
+            if (judgeRepeatVariableName !== null) {
+                 lastJudgeRepeatValue = currentJudgeRepeatValue;
+                 console.log(`Updated global last judge repeat value to: "${lastJudgeRepeatValue}"`);
+             }
+
+        } catch (beforeError) {
+            console.error(`前置请求失败:`, beforeError);
+            const errorMsg = `语音生成中止: 前置请求失败: ${beforeError.message}`;
+            updateStatus(errorMsg);
+            // Don't update lastJudgeRepeatValue on failure
+            return errorMsg; // Stop the entire process
         }
-        // --- End Handle Before Requests ---
+    } else {
+        // Only report skipping if judge_repeat_before logic was active and caused the skip
+         if (judgeRepeatVariableName !== null) {
+             updateStatus(`语音信息：跳过前置请求: judge_repeat_before 值未改变.`);
+             console.log(`Skipping before requests as judge_repeat_before value is unchanged.`);
+         } else {
+              console.log(`Skipping before requests as they are not configured or empty.`);
+         }
+    }
+    // --- End Before Requests Logic ---
 
 
-        // --- Generate Main Audio (call processConversationAudioRequest) ---
-        // If we reached here, either before_requests ran successfully or was skipped/not configured.
-        // Now, proceed with the main audio generation for the current conversation.
-        const result = await processConversationAudioRequest(
-            placeId, // Use character ID + 1 for dataKey lookups inside
-            final_text,
-            conversation, // Pass the full conversation object (includes 'emotion')
-            lang,
-            String(conversationId), // Ensure output name is string ID
-            selectedConfigDefinition, // Pass the *unquoted* definition
-            configData, // Pass the user data object for this config
-            audioDirectoryPath,
-            updateStatus // Pass updateStatus callback
-        );
-        // --------------------
+    // --- Concurrent Processing of Main Requests ---
+    // Get concurrency value from configData, validate it, default to 1
+    const concurrencyValue = configData.concurrency;
+    let concurrencyLimit = Math.max(1, (typeof concurrencyValue === 'number' && Number.isInteger(concurrencyValue) && concurrencyValue > 0) ? concurrencyValue : 1);
 
-        if (result === "ok") {
-            processedCount++;
+    // If allow_concurrency is false in the definition, force concurrency to 1, ignoring the value in configData
+     if (selectedConfigDefinition?.allow_concurrency !== true) {
+         console.log(`Configuration "${selectedConfigName}" does not allow concurrency. Forcing concurrency limit to 1.`);
+         concurrencyLimit = 1; // Re-declare or reassign, depends on preference, let's reassign.
+     }
+
+    updateStatus(`语音生成并发数：${concurrencyLimit}`)
+    console.log(`Starting concurrent processing with limit: ${concurrencyLimit} for ${conversationsToProcessFiltered.length} items.`);
+
+    // Create a p-limit instance with the determined concurrency limit
+    const limit = pLimit(concurrencyLimit);
+
+    // Map each conversation requiring processing to a promise using p-limit
+    const processingPromises = conversationsToProcessFiltered.map(item =>
+        limit(() =>
+             processConversationAudioRequest(
+                 item.placeId, // Use the placeId derived earlier for this conversation
+                 item.final_text,
+                 item.conversation, // Pass the full conversation object
+                 lang,
+                 selectedConfigDefinition, // Pass unquoted definition
+                 configData, // Pass user data (includes proxy, concurrency)
+                 audioDirectoryPath,
+                 updateStatus // Pass the global updateStatus callback (it handles per-item format)
+             )
+        )
+    );
+
+    // Wait for all concurrent tasks to complete.
+    // Promise.allSettled waits for all promises to finish, regardless of success or failure.
+    const results = await Promise.allSettled(processingPromises);
+
+    // Aggregate results after all promises are settled
+    let successCountConcurrent = 0;
+    let errorCountConcurrent = 0;
+
+    results.forEach(result => {
+        if (result.status === 'fulfilled' && result.value.status === 'ok') {
+            successCountConcurrent++;
+        } else if (result.status === 'fulfilled' && result.value.status === 'error') {
+             errorCountConcurrent++;
         } else {
-            // Error already logged by processConversationAudioRequest
-            // updateStatus already called by processConversationAudioRequest
-            errorCount++; // Count the generation error
-            // Continue loop for the next conversation
+            // This case handles promises that were rejected before returning the { status: ... } object,
+            // which shouldn't happen with the current processConversationAudioRequest structure,
+            // but good defensive coding.
+            console.error("A processing promise was rejected unexpectedly:", result.reason);
+            errorCountConcurrent++;
+             // If the rejection reason has a conversationId, try to log a status for it
+            if (result.reason && result.reason.conversationId !== undefined) {
+                 updateStatus(`语音处理ID ${result.reason.conversationId} 失败 原因：意外错误 (${result.reason.message || '未知'})`);
+             } else {
+                 // Generic error status if conversationId is unknown
+                  updateStatus(`语音处理ID 未知 失败 原因：意外处理错误 (${result.reason?.message || '未知'})`);
+             }
         }
-    } // End conversation loop
+    });
 
-    const finalMessage = `完成故事 ${storyId} 的语音生成。成功 ${processedCount} 个，跳过 ${skippedCount} 个，失败 ${errorCount} 个。`;
+    // Total counts including initial skips
+    successCount += successCountConcurrent; // successCount was 0 initially
+    errorCount += errorCountConcurrent; // errorCount was 0 initially
+
+
+    // --- Final Status Update ---
+    const finalMessage = `语音生成结束，成功数：${successCount}/失败数：${errorCount}/跳过数：${skippedCount}`;
     updateStatus(finalMessage);
     console.log(finalMessage);
 
-    // Return "ok" if there were no *generation* errors, otherwise return a summary error message.
-    // Note: Before request failures cause the function to return early.
-    return errorCount === 0 ? "ok" : `完成但有 ${errorCount} 个对话生成失败。`;
+    // Decide return value based on errors encountered during concurrent processing
+    if (errorCountConcurrent > 0) {
+         return `完成但有 ${errorCountConcurrent} 个对话生成失败。`;
+    } else if (successCountConcurrent > 0 || skippedCount > 0) {
+         return "ok"; // Some processing/skipping happened without errors
+    } else {
+         // This case might be rare if conversationsToProcessFiltered is non-empty
+         // and no errors occurred, but zero success/error means something was missed.
+         // However, based on logic, this branch should only be hit if conversationsToProcessFiltered was empty,
+         // which is handled earlier. Returning "ok" here is the safest default for "no critical errors".
+         return "ok";
+    }
 }
 
 // Export the main function and helpers needed by UI or other modules
@@ -807,9 +893,9 @@ export {
     generateVoice,
     loadFullConfig as loadConfig, // Rename export for consistency if UI uses loadConfig
     saveFullConfig as saveConfig, // Rename export for consistency if UI uses saveConfig
-    makeApiRequest, // Export for testing in Vue component
-    substituteVariables, // Export for testing/validation in Vue component
-    unquoteVariablesDeep, // Export for loading/editing in Vue component
-    processConversationAudioRequest, // Exporting this for the test function in VoiceConfig.vue
+    makeApiRequest, // Export for testing/re-use
+    substituteVariables, // Export for testing/validation
+    unquoteVariablesDeep, // Export for loading/editing
+    processConversationAudioRequest, // Export for testing in VoiceConfig.vue
     // saveBlobToFile // Internal helper, typically not exported
 };
