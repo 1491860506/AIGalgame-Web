@@ -1264,7 +1264,7 @@ if (method === 'GET' && requestedPath.startsWith('/webgal/game/vocal/')) {
             const fileContent = await readFile(targetPathForReadFile);
             const { body, contentType } = determineContentTypeAndBody(fileContent, targetPathForReadFile);
             // console.log(`[SW] Music loaded from IndexedDB: ${targetPathForReadFile}`);
-            return new Response(body, { status: 200, headers: { 'Content-Type': contentType } });
+            return new Response(body, { status: 206, headers: { 'Content-Type': contentType } });
 
           } catch (idbError) {
             if (idbError.name === 'FileNotFoundError') {
