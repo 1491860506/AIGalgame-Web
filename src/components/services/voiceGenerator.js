@@ -579,7 +579,7 @@ async function generateVoice(storyId, updateStatus = console.log) {
 
         // Basic text processing - remove content in various brackets and replace spaces/newlines
         // () , （） , [] , 【】 , {} , 『』 , <>
-        const textReplaced = (storyText || '').replace(/[\(（\[【\{『<\s\S]*?[\)）\]】\}』>]/g, '').replace(/ /g, "，").replace(/\n/g, "。");
+        const textReplaced = (storyText || '').replace(/[\(（].*?[\)）]/g, '').replace(/ /g, "，").replace(/\n/g, "。");
         // Trim leading/trailing commas and periods (handles cases where text starts/ends with brackets/newlines)
         let final_text = textReplaced.replace(/^[,。]+|[,。]+$/g, '');
         // Ensure minimum text length or presence after processing

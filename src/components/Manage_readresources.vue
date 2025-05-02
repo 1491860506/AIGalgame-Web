@@ -1258,7 +1258,7 @@ export default {
               
               // 如果该ID的语音文件不存在，添加到缺失列表
               if (!existingAudioIds.has(audioId)) {
-                const final_text=conversation.text.replace(/[\(（].*?[\)）]/g, '').replace(/ /g, "，").replace(/\n/g, "。");
+                let final_text=conversation.text.replace(/[\(（].*?[\)）]/g, '').replace(/ /g, "，").replace(/\n/g, "。");
                 while (final_text.startsWith("，") || final_text.startsWith("。")) {
                     final_text = final_text.substring(1);
                 }

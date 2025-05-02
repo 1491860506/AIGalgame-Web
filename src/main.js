@@ -32,7 +32,7 @@ import {
   faBoxesStacked,
   // Icons from Manage.vue (Solid) - Added based on identification
   faFolderOpen, faChevronRight,
-  faFlask
+  faFlask,faAnglesDown
 } from '@fortawesome/free-solid-svg-icons'
 
 /* 导入 Brands 图标 */
@@ -45,7 +45,7 @@ import {
 library.add(
   // Root.vue Icons
   faHome, faBrain, faMicrophone, faPaintBrush, faMusic, faCamera,
-  faClipboardList, faMagic, faInfoCircle, faSun, faMoon, faDownload, faUpload,
+  faClipboardList, faMagic, faInfoCircle, faSun, faMoon, faDownload, faUpload,faAnglesDown,
   // Logs.vue Icons
   faSyncAlt, faTrashAlt, faSearch, faSpinner, faInfo, faExclamationTriangle,
   faExclamationCircle, faDotCircle, faAngleDoubleLeft, faAngleLeft, faAngleRight, faAngleDoubleRight,faChevronDown,faChevronUp,

@@ -1,234 +1,236 @@
 <template>
-  <div class="voice-config">
-    <!-- Top Bar: Config Selection & Management -->
-    <div class="config-management-bar">
-      <label for="config-select">选择配置:</label>
-      <select id="config-select" v-model="selectedConfigName" @change="switchConfig">
-        <option v-if="!configNames.length" value="" disabled>-- 无可用配置 --</option>
-        <option v-for="name in configNames" :key="name" :value="name">{{ name }}</option>
-      </select>
-      <button class="btn btn-sm btn-add" @click="addConfig">
-        <span class="btn-icon">➕</span> 添加
-      </button>
-      <button class="btn btn-sm btn-modify" @click="openModifyModal" :disabled="!selectedConfigName">
-        <span class="btn-icon">✏️</span> 修改定义
-      </button>
-      <button class="btn btn-sm btn-delete" @click="deleteConfig" :disabled="!selectedConfigName">
-        <span class="btn-icon">🗑️</span> 删除
-      </button>
-    </div>
-
-    <!-- Separator -->
-    <div class="separator thick-separator"></div>
-
-    <!-- Configurable Area (Only shown if a config is selected) -->
-    <div v-if="selectedConfigName && currentConfigDefinition">
-      <!-- Header Section (Proxy, URL, Prompts based on Definition) -->
-      <div class="header-section">
-        <h1 class="title">{{ selectedConfigName }} - 语音合成配置</h1>
-        <!-- Subtitle removed as requested -->
-        <!-- <p class="subtitle">配置语音文件、文本内容和模型参数</p> -->
-
-        <!-- Proxy Switch (Conditional) -->
-        <div class="proxy-config" v-if="currentConfigDefinition.localproxy === true">
-          <label for="proxy-switch" class="proxy-label">使用本地代理:</label>
-          <label class="toggle-switch">
-            <input type="checkbox" id="proxy-switch" v-model="configData.useLocalProxy">
-            <span class="toggle-label-switch"></span>
-          </label>
-        </div>
-
-        <!-- Concurrency Input (Conditional based on allow_concurrency) -->
-        <div class="concurrency-config" v-if="currentConfigDefinition.allow_concurrency === true">
-           <label for="concurrency" class="concurrency-label">并发数:</label>
-           <input type="number" id="concurrency" v-model.number="configData.concurrency" min="1" class="concurrency-input">
-        </div>
-
-
-        <!-- GPT Prompts (Conditional) -->
-        <div v-if="currentConfigDefinition.gptprompt && currentConfigDefinition.gptprompt.length > 0" class="gpt-prompts">
-           <div v-for="(prompt, index) in currentConfigDefinition.gptprompt" :key="index" class="prompt-item">
-             <label :for="`prompt-${Object.keys(prompt)[0]}`">{{ Object.keys(prompt)[0] }}:</label>
-             <textarea
-               :id="`prompt-${Object.keys(prompt)[0]}`"
-               v-model="configData[Object.keys(prompt)[0]]"
-               :placeholder="`输入 ${Object.keys(prompt)[0]} 内容`"
-               rows="3"
-             ></textarea>
-           </div>
-        </div>
-
-        <!-- Emotion Selector (Conditional) -->
-        <div class="emotion-switcher" v-if="emotionsToConfigure.length > 1">
-          <div class="emotion-title">语气选择:</div>
-          <div class="emotion-options">
-            <button
-              v-for="emotion in emotionsToConfigure"
-              :key="emotion"
-              @click="switchEmotion(emotion)"
-              class="emotion-btn"
-              :class="{ active: currentEmotion === emotion }"
-              :data-emotion="emotion"
-            >
-              <span class="emotion-label">{{ emotion || '默认' }}</span> <!-- Show '默认' if emotion is empty string -->
-            </button>
-          </div>
-        </div>
-
-        <!-- Separator (optional, can be removed if redundant) -->
-        <!-- <div class="separator"></div> -->
-      </div>
-
-      <!-- Main Content Area -->
-      <div class="content-section">
-        <!-- Current Emotion Indicator (Conditional) -->
-        <div class="current-emotion-indicator" v-if="emotionsToConfigure.length > 1" :class="`emotion-${currentEmotion || 'default'}`"> <!-- Added default class -->
-          <span class="emotion-indicator-text">当前配置语气: {{ currentEmotion || '默认' }}</span>
-        </div>
-
-        <!-- Header Row (Dynamic) -->
-        <div class="table-header">
-          <div class="col-index">序号</div>
-          <div v-for="item in requiredItems" :key="item.key" class="col-dynamic" :style="{ flex: getColumnFlex(item.key) }">
-            <span>{{ item.label }}</span> <!-- Wrap label in span for alignment -->
-             <button
-                v-if="item.filling"
-                @click="applyFilling(item.key)"
-                class="btn btn-xs btn-fill"
-                title="将序号1的内容应用到全部"
-              >
-                <span class="btn-icon-xs">⏬</span> 一键填入
-              </button>
-          </div>
-        </div>
-
-        <!-- Entries (Dynamic) - REMOVED internal scroll container -->
-        <!-- <div class="entries-container-no-scroll"> -->
-          <div
-            v-for="index in numberOfEntries"
-            :key="index"
-            class="entry-row"
-            :class="{ 'even-row': (index - 1) % 2 === 1 }"
-          >
-            <div class="col-index">{{ index }}</div>
-            <div v-for="item in requiredItems" :key="item.key" class="col-dynamic" :style="{ flex: getColumnFlex(item.key) }">
-              <!-- File Select Input -->
-              <div v-if="item.type === 'fileselect'" class="fileselect-wrapper">
-                 <input
-                   type="text"
-                   :value="getInputValue(index, currentEmotion, item.key)"
-                   readonly
-                   placeholder="选择文件..."
-                   class="fileselect-display"
-                 />
-                 <input
-                   type="file"
-                   :id="`fileInput_${index}_${currentEmotion}_${item.key}`"
-                   @change="handleFileSelect($event, index, currentEmotion, item.key)"
-                   style="display: none;"
-                  />
-                 <label :for="`fileInput_${index}_${currentEmotion}_${item.key}`" class="btn btn-xs btn-file">选择文件</label>
-              </div>
-              <!-- Default Text Input -->
-              <textarea
-                v-else
-                :value="getInputValue(index, currentEmotion, item.key)"
-                @input="setInputValue($event.target.value, index, currentEmotion, item.key)"
-                :placeholder="`输入 ${item.label}`"
-                rows="2"
-              ></textarea>
-            </div>
-          </div>
-        <!-- </div> --> <!-- End of removed scroll container -->
-      </div>
-
-      <!-- ***** NEW: Test Panel ***** -->
-      <div class="test-panel">
-        <h3 class="panel-title">测试当前配置 (序号 1)</h3>
-        <div class="test-controls">
-          <button class="btn btn-info btn-test" @click="testCurrentConfig" :disabled="isTesting || !selectedConfigName">
-            <span v-if="isTesting" class="spinner"></span>
-            <span v-else class="btn-icon">🧪</span>
-            {{ isTesting ? '正在测试中...' : '运行测试' }}
-          </button>
-          <p v-if="isTesting" class="test-status-text">正在生成测试语音，请稍候...</p>
-        </div>
-        <div class="test-results" v-if="!isTesting && (testShortAudioSrc || testLongAudioSrc || testError)">
-           <div v-if="testError" class="error-message test-error-msg">
-             <strong>测试失败:</strong> {{ testError }}
-           </div>
-           <div v-if="testShortAudioSrc" class="audio-preview">
-             <label>短文本 ("测试"):</label>
-             <audio controls :src="testShortAudioSrc" ref="audioShort"></audio>
-           </div>
-           <div v-if="testLongAudioSrc" class="audio-preview">
-             <label>长文本:</label>
-             <audio controls :src="testLongAudioSrc" ref="audioLong"></audio>
-           </div>
-        </div>
-      </div>
-      <!-- ***** End Test Panel ***** -->
-
-      <!-- Save Button -->
-      <div class="save-panel">
-        <button class="btn btn-success btn-save" @click="saveConfigData">
-          <span class="btn-icon">💾</span> 保存 {{ selectedConfigName }} 配置数据
+  <div>
+    <!-- Apply theme class for easier scoping if needed, though direct variables should work -->
+    <div class="voice-config themed-component">
+      <!-- Top Bar: Config Selection & Management -->
+      <div class="config-management-bar">
+        <label for="config-select">选择配置:</label>
+        <select id="config-select" v-model="selectedConfigName" @change="switchConfig">
+          <option v-if="!configNames.length" value="" disabled>-- 无可用配置 --</option>
+          <option v-for="name in configNames" :key="name" :value="name">{{ name }}</option>
+        </select>
+        <button class="btn btn-sm btn-add" @click="addConfig">
+          <font-awesome-icon :icon="['fas', 'plus']" class="btn-icon" /> 添加
+        </button>
+        <button class="btn btn-sm btn-modify" @click="openModifyModal" :disabled="!selectedConfigName">
+          <font-awesome-icon :icon="['fas', 'pen-to-square']" class="btn-icon" /> 修改定义
+        </button>
+        <button class="btn btn-sm btn-delete" @click="deleteConfig" :disabled="!selectedConfigName">
+          <font-awesome-icon :icon="['fas', 'trash-alt']" class="btn-icon" /> 删除
         </button>
       </div>
 
-    </div> <!-- End v-if="selectedConfigName" -->
+      <!-- Separator -->
+      <div class="separator thick-separator"></div>
 
-     <!-- Placeholder when no config is selected -->
-     <div v-else class="no-config-selected">
-        <p>请在上方选择一个配置，或点击“添加”创建一个新配置。</p>
-     </div>
+      <!-- Configurable Area (Only shown if a config is selected) -->
+      <div v-if="selectedConfigName && currentConfigDefinition">
+        <!-- Header Section -->
+        <div class="header-section">
+          <h1 class="title">{{ selectedConfigName }} - 语音合成配置</h1>
 
-    <!-- Modify Config JSON Modal -->
-    <div class="modal-overlay" v-if="isEditingConfigJson" @click.self="closeModifyModal">
-        <div class="modal-content">
-            <h2>修改配置定义: {{ selectedConfigName }}</h2>
-            <p class="modal-hint">在此处编辑配置的JSON定义，控制页面布局和请求参数。</p>
-            <textarea v-model="currentJsonEdit" class="json-editor-area"></textarea>
-            <div v-if="jsonEditError" class="error-message">{{ jsonEditError }}</div>
-            <div class="modal-actions">
-                <button class="btn btn-secondary" @click="closeModifyModal">取消</button>
-                <button class="btn btn-primary" @click="saveModifiedConfig">保存定义</button>
+          <!-- NEW: Proxy & Concurrency Row Wrapper -->
+          <div class="proxy-concurrency-row" v-if="currentConfigDefinition.localproxy === true || currentConfigDefinition.allow_concurrency === true">
+             <!-- Proxy Switch -->
+             <div class="form-group proxy-config" v-if="currentConfigDefinition.localproxy === true">
+               <label for="proxy-switch" class="proxy-label">使用本地代理:</label>
+               <label class="toggle-switch">
+                 <input type="checkbox" id="proxy-switch" v-model="configData.useLocalProxy">
+                 <span class="toggle-label-switch"></span>
+               </label>
+             </div>
+
+             <!-- Concurrency Input -->
+             <div class="form-group concurrency-config" v-if="currentConfigDefinition.allow_concurrency === true">
+               <label for="concurrency" class="concurrency-label">并发数:</label>
+               <input type="number" id="concurrency" v-model.number="configData.concurrency" min="1"
+                 class="concurrency-input form-input">
+             </div>
+          </div>
+
+
+          <!-- GPT Prompts -->
+          <div v-if="currentConfigDefinition.gptprompt && currentConfigDefinition.gptprompt.length > 0"
+            class="gpt-prompts">
+            <div v-for="(prompt, index) in currentConfigDefinition.gptprompt" :key="index"
+              class="prompt-item form-group">
+              <label :for="`prompt-${Object.keys(prompt)[0]}`">{{ Object.keys(prompt)[0] }}:</label>
+              <textarea :id="`prompt-${Object.keys(prompt)[0]}`" v-model="configData[Object.keys(prompt)[0]]"
+                :placeholder="`输入 ${Object.keys(prompt)[0]} 内容`" rows="3" class="form-textarea"></textarea>
             </div>
-        </div>
-    </div>
+          </div>
 
-    <!-- Message Bubble for notifications -->
-    <div
-      class="message-bubble"
-      :class="{ active: showMessage, success: messageType === 'success', error: messageType === 'error', warning: messageType === 'warning', info: messageType === 'info' }"
-    >
-      <span>{{ messageContent }}</span>
+          <!-- Emotion Selector -->
+          <div class="emotion-switcher" v-if="emotionsToConfigure.length > 1">
+            <div class="emotion-title">语气选择 (编辑):</div>
+            <div class="emotion-options">
+              <button v-for="emotion in emotionsToConfigure" :key="emotion" @click="switchEmotion(emotion)"
+                class="emotion-btn" :class="{ active: currentEmotion === emotion }" :data-emotion="emotion">
+                <span class="emotion-label">{{ emotion || '默认' }}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Main Content Area -->
+        <div class="content-section">
+          <!-- Current Emotion Indicator -->
+          <div class="current-emotion-indicator" v-if="emotionsToConfigure.length > 1"
+            :class="`emotion-${currentEmotion || 'default'}`">
+            <span class="emotion-indicator-text">当前编辑语气: {{ currentEmotion || '默认' }}</span>
+          </div>
+
+          <!-- Header Row -->
+          <div class="table-header">
+            <div class="col-index">序号</div>
+            <div v-for="item in requiredItems" :key="item.key" class="col-dynamic"
+              :style="{ flex: getColumnFlex(item.key) }">
+              <span>{{ item.label }}</span>
+              <button v-if="item.filling" @click="applyFilling(item.key)" class="btn btn-xs btn-fill"
+                title="将序号1的内容应用到全部">
+                <font-awesome-icon :icon="['fas', 'angles-down']" /> 一键填入
+              </button>
+            </div>
+          </div>
+
+          <!-- Entries -->
+          <div v-for="index in numberOfEntries" :key="index" class="entry-row"
+            :class="{ 'even-row': (index - 1) % 2 === 1 }">
+            <div class="col-index">{{ index }}</div>
+            <div v-for="item in requiredItems" :key="item.key" class="col-dynamic"
+              :style="{ flex: getColumnFlex(item.key) }">
+              <!-- File Select Input -->
+              <div v-if="item.type === 'fileselect'" class="fileselect-wrapper">
+                <input type="text" :value="getInputValue(index, currentEmotion, item.key)" readonly
+                  placeholder="选择文件..." class="fileselect-display form-input" />
+                <input type="file" :id="`fileInput_${index}_${currentEmotion}_${item.key}`"
+                  @change="handleFileSelect($event, index, currentEmotion, item.key)" style="display: none;" />
+                <label :for="`fileInput_${index}_${currentEmotion}_${item.key}`"
+                  class="btn btn-xs btn-file"><font-awesome-icon :icon="['fas', 'folder-open']" /> 选择文件</label>
+                  <!-- Optional: Added folder-open icon -->
+              </div>
+              <!-- Default Text Input -->
+              <textarea v-else :value="getInputValue(index, currentEmotion, item.key)"
+                @input="setInputValue($event.target.value, index, currentEmotion, item.key)"
+                :placeholder="`输入 ${item.label}`" rows="2" class="form-textarea"></textarea>
+            </div>
+          </div>
+        </div>
+
+        <!-- ***** NEW: Test Panel ***** -->
+        <div class="test-panel">
+          <!-- Updated Title -->
+          <h3 class="panel-title">测试当前配置 (序号 {{ selectedTestIndex }})</h3>
+          <div class="test-controls">
+            <!-- Test Index Selector -->
+            <div class="test-control-item">
+              <label for="test-index-select">选择测试序号:</label>
+              <select id="test-index-select" v-model.number="selectedTestIndex" class="form-select">
+                <option v-for="i in numberOfEntries" :key="`test-idx-${i}`" :value="i">
+                  {{ i }}
+                </option>
+              </select>
+            </div>
+
+            <!-- Conditional GPT Return Input -->
+            <div class="test-control-item" v-if="usesGptReturnVariable">
+              <label for="test-gptreturn-input">语气 (gptreturn):</label>
+              <input type="text" id="test-gptreturn-input" v-model="testGptReturnValue" placeholder="输入测试语气 (可为空)"
+                class="form-input test-gptreturn-input" />
+            </div>
+
+            <!-- Test Button -->
+            <div class="test-control-item test-button-container">
+              <button class="btn btn-info btn-test" @click="testCurrentConfig"
+                :disabled="isTesting || !selectedConfigName || numberOfEntries < 1">
+                <font-awesome-icon v-if="isTesting" :icon="['fas', 'spinner']" spin class="btn-icon" />
+                <font-awesome-icon v-else :icon="['fas', 'flask']" class="btn-icon" />
+                {{ isTesting ? '正在测试中...' : '运行测试' }}
+              </button>
+              <p v-if="isTesting" class="test-status-text">正在生成测试语音，请稍候...</p>
+            </div>
+          </div>
+          <div class="test-results" v-if="!isTesting && (testShortAudioSrc || testLongAudioSrc || testError)">
+            <div v-if="testError" class="error-message test-error-msg">
+              <strong>测试失败:</strong> {{ testError }}
+            </div>
+            <div v-if="testShortAudioSrc" class="audio-preview">
+              <label>短文本 ("测试"):</label>
+              <audio controls :src="testShortAudioSrc" ref="audioShort"></audio>
+            </div>
+            <div v-if="testLongAudioSrc" class="audio-preview">
+              <label>长文本:</label>
+              <audio controls :src="testLongAudioSrc" ref="audioLong"></audio>
+            </div>
+          </div>
+        </div>
+        <!-- ***** End Test Panel ***** -->
+
+        <!-- Save Button -->
+        <div class="save-panel">
+          <button class="btn btn-success btn-save" @click="saveConfigData">
+            <font-awesome-icon :icon="['fas', 'floppy-disk']" class="btn-icon" /> 保存 {{ selectedConfigName }} 配置数据
+          </button>
+        </div>
+
+      </div> <!-- End v-if="selectedConfigName" -->
+
+      <!-- Placeholder when no config is selected -->
+      <div v-else class="no-config-selected">
+        <p>请在上方选择一个配置，或点击“添加”创建一个新配置。</p>
+      </div>
+
+      <!-- Modify Config JSON Modal -->
+      <div class="modal-overlay" v-if="isEditingConfigJson" @click.self="closeModifyModal">
+        <div class="modal-content">
+          <h2>修改配置定义: {{ selectedConfigName }}</h2>
+          <p class="modal-hint">在此处编辑配置的JSON定义，控制页面布局和请求参数。</p>
+          <textarea v-model="currentJsonEdit" class="json-editor-area form-textarea"></textarea>
+          <div v-if="jsonEditError" class="error-message">{{ jsonEditError }}</div>
+          <div class="modal-actions">
+            <button class="btn btn-secondary" @click="closeModifyModal">取消</button>
+            <button class="btn btn-primary" @click="saveModifiedConfig">保存定义</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Message Bubble for notifications -->
+      <div class="message-bubble"
+        :class="{ active: showMessage, success: messageType === 'success', error: messageType === 'error', warning: messageType === 'warning', info: messageType === 'info' }">
+        <span>{{ messageContent }}</span>
+      </div>
     </div>
   </div>
 </template>
 
 <script>
-import { writeFile, readFile, createFolder } from './services/IndexedDBFileSystem.js'; // Assuming this path is correct
-// Import necessary functions, including the renamed processing function
-import { generateVoice, makeApiRequest, substituteVariables, unquoteVariablesDeep, processConversationAudioRequest } from './services/voiceGenerator.js'; // Adjust path if needed
+// --- IMPORT FontAwesomeIcon (if not globally registered) ---
+// import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome'; // Assuming it's globally registered in main.js
+
+import { writeFile, readFile, createFolder } from './services/IndexedDBFileSystem.js';
+import { generateVoice, makeApiRequest, substituteVariables, unquoteVariablesDeep, processConversationAudioRequest } from './services/voiceGenerator.js';
 
 const LS_KEY = 'aiGalgameConfig';
 const SOVITS_KEY = 'SOVITS';
-const CONFIG_DEFINITIONS_KEY = 'config'; // Store definitions under aiGalgameConfig.SOVITS.config
-const SELECTED_MODEL_KEY = 'model_choose'; // Key to store the selected config name
+const CONFIG_DEFINITIONS_KEY = 'config';
+const SELECTED_MODEL_KEY = 'model_choose';
 
 export default {
   name: 'VoiceConfigMulti',
+  // --- ADD FontAwesomeIcon to components if not global ---
+  // components: {
+  //   FontAwesomeIcon
+  // },
   data() {
     return {
-      configurations: {}, // Stores all config definitions { name: { definition } }
-      configNames: [], // Stores names for the dropdown
-      selectedConfigName: null, // Currently selected config name
-      currentConfigDefinition: null, // JSON definition of the selected config
-      configData: {}, // Holds the actual user-entered data for the selected config
-      filesToSave: {}, // Temporary store for File objects { dataKey_itemKey: File }
+      configurations: {},
+      configNames: [],
+      selectedConfigName: null,
+      currentConfigDefinition: null,
+      configData: {},
+      filesToSave: {},
 
-      currentEmotion: '', // Currently selected emotion for editing
+      currentEmotion: '', // Editing emotion
 
       // UI State
       isEditingConfigJson: false,
@@ -241,66 +243,96 @@ export default {
       messageContent: '',
       messageTimeout: null,
 
-      // ***** NEW: Test State *****
+      // Test State
       isTesting: false,
       testShortAudioSrc: null,
       testLongAudioSrc: null,
       testError: null,
-      // Store blob URLs to revoke them later
       blobUrlShort: null,
       blobUrlLong: null,
-      // ---------------------------
+      selectedTestIndex: 1, // NEW: Index for testing
+      testGptReturnValue: '', // NEW: Input for gptreturn testing
     };
   },
   computed: {
-    // --- Computed properties based on currentConfigDefinition ---
     numberOfEntries() {
-      return this.currentConfigDefinition?.number || 0;
+      // Ensure it returns 0 if definition is null or number is invalid
+      const num = this.currentConfigDefinition?.number;
+      return (typeof num === 'number' && num > 0) ? num : 0;
     },
     emotionsToConfigure() {
       const emotions = this.currentConfigDefinition?.emotion_list;
-      return emotions && emotions.length > 0 ? emotions : ['']; // Use '' for default/no emotion case
+      return emotions && emotions.length > 0 ? emotions : [''];
     },
     requiredItems() {
-        return (this.currentConfigDefinition?.required_item || []).map(item => {
-            const key = Object.keys(item)[0];
-            const label = item[key];
-            const filling = item.filling === true;
-            // Determine type based on key name pattern or specific key like 'fileselect'
-            // Note: The 'fileselect' key itself is the type indicator in the config.
-            const type = key === 'fileselect' ? 'fileselect' : 'text';
-            return { key, label, filling, type };
-        });
+      return (this.currentConfigDefinition?.required_item || []).map(item => {
+        const key = Object.keys(item)[0];
+        const label = item[key];
+        const filling = item.filling === true;
+        // Correctly identify fileselect type
+        const type = (key === 'fileselect' || (item.hasOwnProperty('fileselect') && item.fileselect === true)) ? 'fileselect' : 'text';
+        return { key, label, filling, type };
+      });
     },
-    // --- Helpers ---
     allowedVariables() {
-        const itemKeys = (this.currentConfigDefinition?.required_item || []).map(item => Object.keys(item)[0]);
-        // Add standard internal variables available for substitution
-        return new Set([...itemKeys, 'gptreturn', 'text', 'language']);
+      const itemKeys = (this.currentConfigDefinition?.required_item || []).map(item => Object.keys(item)[0]);
+      return new Set([...itemKeys, 'gptreturn', 'text', 'language']);
+    },
+    // NEW: Computed property to check if {{gptreturn}} is used in the definition
+    usesGptReturnVariable() {
+      if (!this.currentConfigDefinition) return false;
+      try {
+        // Check the *unquoted* definition string
+        const definitionString = JSON.stringify(this.currentConfigDefinition);
+        // Search for the literal string '{{gptreturn}}' or '{{ gptreturn }}' etc.
+        return /{{\s*gptreturn\s*}}/.test(definitionString);
+      } catch (e) {
+        console.error("Error checking for gptreturn variable:", e);
+        return false;
+      }
+    },
+  },
+  watch: {
+    // Reset test index if number of entries changes (e.g., loading new config)
+    numberOfEntries(newVal) {
+      if (this.selectedTestIndex > newVal || this.selectedTestIndex < 1) {
+        this.selectedTestIndex = newVal >= 1 ? 1 : 0; // Reset to 1 if possible, else 0
+      }
+      // Also reset if only 1 entry exists
+      if (newVal === 1) {
+          this.selectedTestIndex = 1;
+      }
+    },
+    // Optionally reset testGptReturnValue when config changes
+    selectedConfigName() {
+      this.testGptReturnValue = ''; // Reset tone input on config switch
+      this.selectedTestIndex = this.numberOfEntries >= 1 ? 1 : 0; // Also reset index
+      // Clear previous test results when config changes
+      this.revokeTestAudioUrls();
+      this.testError = null;
+      this.isTesting = false; // Ensure testing state is reset
     }
   },
   mounted() {
     this.loadAllConfigs();
-    // Load the previously selected model if available
     const lastSelected = this.loadLastSelectedModel();
     if (lastSelected && this.configNames.includes(lastSelected)) {
-        this.selectedConfigName = lastSelected;
+      this.selectedConfigName = lastSelected;
     } else if (this.configNames.length > 0) {
-       this.selectedConfigName = this.configNames[0]; // Fallback to first
+      this.selectedConfigName = this.configNames[0];
     }
 
     if (this.selectedConfigName) {
-       this.switchConfig(); // Load definition and data for the selected/default config
+      this.switchConfig();
     }
   },
   beforeUnmount() {
-      // ***** NEW: Revoke Blob URLs on component destroy *****
-      this.revokeTestAudioUrls();
-      // ---------------------------------------------------
-      clearTimeout(this.messageTimeout); // Also clear message timeout
+    this.revokeTestAudioUrls();
+    clearTimeout(this.messageTimeout);
   },
   methods: {
-    // --- Config Management ---
+    // --- Config Management --- (KEEP EXISTING methods: loadAllConfigs, saveAllConfigs, saveLastSelectedModel, loadLastSelectedModel, addConfig, openModifyModal, closeModifyModal, saveModifiedConfig, deleteConfig, switchConfig)
+    // --- START Existing Methods (Keep as is) ---
     loadAllConfigs() {
       try {
         const saved = JSON.parse(localStorage.getItem(LS_KEY) || '{}');
@@ -313,519 +345,493 @@ export default {
         this.configNames = [];
       }
     },
-
     saveAllConfigs() {
-        try {
-            const saved = JSON.parse(localStorage.getItem(LS_KEY) || '{}');
-            if (!saved[SOVITS_KEY]) {
-                saved[SOVITS_KEY] = {};
-            }
-            const configsToSave = {};
-            for (const name in this.configurations) {
-                // Quote variables before saving definition JSON
-                configsToSave[name] = this.quoteVariables(this.configurations[name]);
-            }
-             saved[SOVITS_KEY][CONFIG_DEFINITIONS_KEY] = configsToSave;
-
-            localStorage.setItem(LS_KEY, JSON.stringify(saved));
-        } catch (error) {
-            console.error('Error saving config definitions:', error);
-            this.showMessageBubble('error', '保存配置列表失败');
+      try {
+        const saved = JSON.parse(localStorage.getItem(LS_KEY) || '{}');
+        if (!saved[SOVITS_KEY]) {
+          saved[SOVITS_KEY] = {};
         }
+        const configsToSave = {};
+        for (const name in this.configurations) {
+          // Ensure quoting happens correctly
+          configsToSave[name] = this.quoteVariables(this.configurations[name]);
+        }
+        saved[SOVITS_KEY][CONFIG_DEFINITIONS_KEY] = configsToSave;
+        localStorage.setItem(LS_KEY, JSON.stringify(saved));
+      } catch (error) {
+        console.error('Error saving config definitions:', error);
+        this.showMessageBubble('error', '保存配置列表失败');
+      }
     },
-
-    // --- NEW: Function to save the currently selected config name ---
     saveLastSelectedModel(configName) {
-        try {
-            const saved = JSON.parse(localStorage.getItem(LS_KEY) || '{}');
-            if (!saved[SOVITS_KEY]) {
-                saved[SOVITS_KEY] = {};
-            }
-            if (configName) {
-                saved[SOVITS_KEY][SELECTED_MODEL_KEY] = configName;
-            } else {
-                // If configName is null or undefined, remove the key
-                delete saved[SOVITS_KEY][SELECTED_MODEL_KEY];
-            }
-            localStorage.setItem(LS_KEY, JSON.stringify(saved));
-        } catch (error) {
-             console.error('Error saving last selected model name:', error);
-             // Non-critical error, maybe don't show bubble
+      try {
+        const saved = JSON.parse(localStorage.getItem(LS_KEY) || '{}');
+        if (!saved[SOVITS_KEY]) {
+          saved[SOVITS_KEY] = {};
         }
+        if (configName) {
+          saved[SOVITS_KEY][SELECTED_MODEL_KEY] = configName;
+        } else {
+          delete saved[SOVITS_KEY][SELECTED_MODEL_KEY];
+        }
+        localStorage.setItem(LS_KEY, JSON.stringify(saved));
+      } catch (error) {
+        console.error('Error saving last selected model name:', error);
+      }
     },
-
-    // --- NEW: Function to load the previously selected config name ---
     loadLastSelectedModel() {
-         try {
-            const saved = JSON.parse(localStorage.getItem(LS_KEY) || '{}');
-            return saved?.[SOVITS_KEY]?.[SELECTED_MODEL_KEY] || null;
-         } catch (error) {
-            console.error('Error loading last selected model name:', error);
-            return null;
-         }
+      try {
+        const saved = JSON.parse(localStorage.getItem(LS_KEY) || '{}');
+        return saved?.[SOVITS_KEY]?.[SELECTED_MODEL_KEY] || null;
+      } catch (error) {
+        console.error('Error loading last selected model name:', error);
+        return null;
+      }
     },
-
-
     addConfig() {
       const name = prompt("请输入新配置的名称:", "NewConfig");
       if (name && name.trim() && !this.configurations[name.trim()]) {
         const trimmedName = name.trim();
-        // Updated defaultConfig structure
         const defaultConfig = {
           number: 7,
-          required_item: [
-            { "modelname": "模型名称" }
-          ],
+          required_item: [{ "modelname": "模型名称" }, { "fileselect": "参考音频" }, { "reference_text": "参考文本" }],
           url: "http://test.com/tts",
           requestmethod: "get",
-          getparams: [{ "model": "{{modelname}}" }],
-          // Add example before_requests
-          "before_requests": [
-            {
-              "url": "http://test.com/auth",
-              "requestmethod": "post",
-              "body": { "key": "your_api_key" }
-            }
-          ],
-          "judge_repeat_before": "{{modelname}}", // Example repeat logic
-          "allow_concurrency": false // Default to false
+          getparams: [{ "model": "{{modelname}}", "text": "{{text}}" }],
+          "before_requests": [],
+          "judge_repeat_before": "",
+          "allow_concurrency": false,
+          "emotion_list": ["happy", "sad", "angry"],
+          "emotion_feedback": "happy",
+          "gptprompt": [{ "system_prompt": "You are a helpful assistant." }],
+          "localproxy": false
         };
-
-        this.configurations[trimmedName] = defaultConfig;
+        // Store the unquoted version internally, quote on save
+        this.configurations[trimmedName] = defaultConfig; // Store as is initially
         this.configNames.push(trimmedName);
-        this.saveAllConfigs();
+        this.saveAllConfigs(); // Save will quote it
         this.selectedConfigName = trimmedName;
-        this.switchConfig(); // This will now also save the selected name
+        this.switchConfig(); // Switch will unquote it for use
         this.showMessageBubble('success', `配置 "${trimmedName}" 已添加`);
       } else if (name) {
         this.showMessageBubble('error', `配置名称 "${name.trim()}" 已存在或无效`);
       }
     },
-
     openModifyModal() {
-        if (!this.selectedConfigName) return;
-        try {
-            // Unquote variables before displaying in editor
-            const configToEdit = unquoteVariablesDeep(JSON.parse(JSON.stringify(this.configurations[this.selectedConfigName] || {})));
-             this.currentJsonEdit = JSON.stringify(configToEdit, null, 2);
-             this.jsonEditError = '';
-             this.isEditingConfigJson = true;
-        } catch (error) {
-             console.error("Error preparing JSON for editing:", error);
-             this.showMessageBubble('error', '无法加载配置进行编辑');
-        }
-    },
-
-    closeModifyModal() {
-        this.isEditingConfigJson = false;
-        this.currentJsonEdit = '';
+      if (!this.selectedConfigName) return;
+      try {
+        // Get the stored config (might be quoted), unquote it for editing
+        const configToEdit = unquoteVariablesDeep(JSON.parse(JSON.stringify(this.configurations[this.selectedConfigName] || {})));
+        this.currentJsonEdit = JSON.stringify(configToEdit, null, 2);
         this.jsonEditError = '';
+        this.isEditingConfigJson = true;
+      } catch (error) {
+        console.error("Error preparing JSON for editing:", error);
+        this.showMessageBubble('error', '无法加载配置进行编辑');
+      }
     },
-
+    closeModifyModal() {
+      this.isEditingConfigJson = false;
+      this.currentJsonEdit = '';
+      this.jsonEditError = '';
+    },
     saveModifiedConfig() {
-        try {
-            const validationResult = this.validateConfigJson(this.currentJsonEdit);
-            if (!validationResult.isValid) {
-                this.jsonEditError = validationResult.message;
-                return;
-            }
-            const newDefinition = validationResult.parsedJson;
-            // Quote variables back before saving the definition internally
-            this.configurations[this.selectedConfigName] = this.quoteVariables(newDefinition);
-            this.saveAllConfigs();
-            // Reload the definition after saving (it will be unquoted by switchConfig)
-            this.switchConfig(); // Reload everything for the current config
-            this.closeModifyModal();
-            this.showMessageBubble('success', `配置 "${this.selectedConfigName}" 定义已更新`);
-
-        } catch (error) {
-            console.error("Error saving modified JSON:", error);
-            this.jsonEditError = `保存失败: ${error.message}`;
-            this.showMessageBubble('error', '保存配置定义失败');
+      try {
+        const validationResult = this.validateConfigJson(this.currentJsonEdit);
+        if (!validationResult.isValid) {
+          this.jsonEditError = validationResult.message;
+          return;
         }
-    },
+        const newDefinition = validationResult.parsedJson;
+        // Store the unquoted definition internally
+        this.configurations[this.selectedConfigName] = newDefinition;
+        this.saveAllConfigs(); // Save will quote it
+        this.switchConfig(); // Reload the (now unquoted) definition for the UI
+        this.closeModifyModal();
+        this.showMessageBubble('success', `配置 "${this.selectedConfigName}" 定义已更新`);
 
+      } catch (error) {
+        console.error("Error saving modified JSON:", error);
+        this.jsonEditError = `保存失败: ${error.message}`;
+        this.showMessageBubble('error', '保存配置定义失败');
+      }
+    },
     deleteConfig() {
       if (!this.selectedConfigName) return;
       if (confirm(`确定要删除配置 "${this.selectedConfigName}" 吗？其对应的设置数据也将被删除。`)) {
         const nameToDelete = this.selectedConfigName;
-
-        // 1. Delete definition
         delete this.configurations[nameToDelete];
         this.configNames = this.configNames.filter(name => name !== nameToDelete);
-
-        // 2. Delete associated data
         try {
-            const saved = JSON.parse(localStorage.getItem(LS_KEY) || '{}');
-            if (saved[SOVITS_KEY]?.[nameToDelete]) {
-                 delete saved[SOVITS_KEY][nameToDelete];
-                 // Check if the deleted config was the last selected one
-                 if (saved[SOVITS_KEY]?.[SELECTED_MODEL_KEY] === nameToDelete) {
-                     delete saved[SOVITS_KEY][SELECTED_MODEL_KEY]; // Remove it if it was selected
-                 }
-                 localStorage.setItem(LS_KEY, JSON.stringify(saved));
-            }
-        } catch(error) {
-            console.error(`Error deleting data for config ${nameToDelete}:`, error);
+          const saved = JSON.parse(localStorage.getItem(LS_KEY) || '{}');
+          if (saved[SOVITS_KEY]?.[nameToDelete]) {
+            delete saved[SOVITS_KEY][nameToDelete];
+          }
+          // Also remove the definition from the stored config
+          if (saved[SOVITS_KEY]?.[CONFIG_DEFINITIONS_KEY]?.[nameToDelete]) {
+             delete saved[SOVITS_KEY][CONFIG_DEFINITIONS_KEY][nameToDelete];
+          }
+          if (saved[SOVITS_KEY]?.[SELECTED_MODEL_KEY] === nameToDelete) {
+             delete saved[SOVITS_KEY][SELECTED_MODEL_KEY];
+          }
+          localStorage.setItem(LS_KEY, JSON.stringify(saved));
+
+        } catch (error) {
+          console.error(`Error deleting data or definition for config ${nameToDelete}:`, error);
         }
-
-        // 3. Save updated definitions
-        this.saveAllConfigs();
-
-        // 4. Update UI
+        // Don't call saveAllConfigs here as we manually removed from LS
         this.selectedConfigName = this.configNames.length > 0 ? this.configNames[0] : null;
-
-        // *** Save the new selected config name (or null if none left) ***
-        this.saveLastSelectedModel(this.selectedConfigName);
-
+        this.saveLastSelectedModel(this.selectedConfigName); // Save new selection
         if (this.selectedConfigName) {
-            this.switchConfig(); // Load the next selected config
+          this.switchConfig();
         } else {
-            this.currentConfigDefinition = null;
-            this.configData = {}; // Clear data if no config is left
+          this.currentConfigDefinition = null;
+          this.configData = {};
         }
-
         this.showMessageBubble('success', `配置 "${nameToDelete}" 已删除`);
       }
     },
-
     switchConfig() {
-        if (!this.selectedConfigName) {
-            this.currentConfigDefinition = null;
-            this.configData = {};
-            this.filesToSave = {};
-            this.saveLastSelectedModel(null); // Save null if no config is selected
-            return;
-        }
+      if (!this.selectedConfigName) {
+        this.currentConfigDefinition = null;
+        this.configData = {};
+        this.filesToSave = {};
+        this.saveLastSelectedModel(null);
+        return;
+      }
+      this.saveLastSelectedModel(this.selectedConfigName);
 
-        // *** Save the newly selected config name ***
-        this.saveLastSelectedModel(this.selectedConfigName);
-
-        // Load definition and unquote variables for use in UI/logic
+      // Ensure we are using the unquoted version for the UI
+      const storedDefinition = this.configurations[this.selectedConfigName];
+      if (!storedDefinition) {
+           console.error(`Definition for ${this.selectedConfigName} not found in configurations object.`);
+           this.showMessageBubble('error', `无法加载配置定义: ${this.selectedConfigName}`);
+           this.currentConfigDefinition = null;
+           this.configData = {};
+           return;
+      }
+      try {
+        // Deep clone and unquote
         this.currentConfigDefinition = unquoteVariablesDeep(
-             JSON.parse(JSON.stringify(this.configurations[this.selectedConfigName] || {}))
+          JSON.parse(JSON.stringify(storedDefinition))
         );
+      } catch(e) {
+         console.error(`Error unquoting definition for ${this.selectedConfigName}:`, e, storedDefinition);
+         this.showMessageBubble('error', `加载配置定义时出错: ${this.selectedConfigName}`);
+         // Fallback: try to use the stored definition as is, might cause issues
+         this.currentConfigDefinition = JSON.parse(JSON.stringify(storedDefinition));
+      }
 
-        // Set initial emotion
-        this.currentEmotion = this.emotionsToConfigure.length > 0 ? this.emotionsToConfigure[0] : ''; // Default to first or empty
 
-        // Load data for the selected config
-        this.loadConfigData();
-        this.filesToSave = {}; // Clear pending files
+      this.currentEmotion = this.emotionsToConfigure.length > 0 ? this.emotionsToConfigure[0] : '';
+      this.loadConfigData();
+      this.filesToSave = {};
+      // Reset test index to 1 when switching config
+      this.selectedTestIndex = this.numberOfEntries >= 1 ? 1 : 0;
+      this.testGptReturnValue = ''; // Reset tone input
+      // Clear previous test results
+      this.revokeTestAudioUrls();
+      this.testError = null;
+      this.isTesting = false;
     },
+    // --- END Existing Methods (Keep as is) ---
 
-    // --- Data Handling ---
+    // --- Data Handling --- (KEEP EXISTING methods: loadConfigData, saveConfigData, getDataKey, getInputValue, setInputValue, handleFileSelect)
+    // --- START Existing Methods (Keep as is) ---
     loadConfigData() {
-        try {
-            const saved = JSON.parse(localStorage.getItem(LS_KEY) || '{}');
-            // Ensure we get a fresh object copy to avoid potential reactivity issues with direct localStorage reference
-            const loadedData = saved?.[SOVITS_KEY]?.[this.selectedConfigName] || {};
+      try {
+        const saved = JSON.parse(localStorage.getItem(LS_KEY) || '{}');
+        const loadedData = saved?.[SOVITS_KEY]?.[this.selectedConfigName] || {};
 
-            // Initialize concurrency if enabled and missing/invalid
-            if (this.currentConfigDefinition?.allow_concurrency === true) {
-                const loadedConcurrency = loadedData.concurrency;
-                if (typeof loadedConcurrency !== 'number' || !Number.isInteger(loadedConcurrency) || loadedConcurrency <= 0) {
-                    loadedData.concurrency = 1; // Default to 1 if invalid or missing
-                }
-            } else {
-                 // If concurrency is not enabled in definition, ensure it's not set in data or ignored
-                 delete loadedData.concurrency;
-            }
-
-
-            this.configData = JSON.parse(JSON.stringify(loadedData)); // Deep copy for reactivity
-
-
-            // Initialize default values from required_item and gptprompt if missing in loaded data
-            // Note: This only initializes the first entry (index 1) and top-level gptprompt data
-             (this.currentConfigDefinition?.required_item || []).forEach(item => {
-                 const key = Object.keys(item)[0]; // e.g., 'fileselect', 'modelname'
-                 // If the item key is meant to be a file select, don't set a default text value
-                 if (item.hasOwnProperty('fileselect') || key === 'fileselect') { // Check both key and potential property name
-                     // Skip this specific key or definition indicating fileselect
-                     if (key === 'fileselect' || item.fileselect === true) return;
-                 }
-
-                 // Initialize if the key is not present or is explicitly null/undefined in loaded data for the first entry (index 1)
-                 if (this.configData[1] === undefined || this.configData[1][key] === undefined || this.configData[1][key] === null) {
-                      // Note: We only initialize the *first* entry (index 1) with the default from the definition.
-                      // Other entries are expected to be empty unless saved data exists.
-                     if (!this.configData[1]) this.configData[1] = {};
-                     const itemDefaultValue = item[key];
-                     // Initialize with default value from definition, default to '' if definition value is not primitive or is null/undefined
-                     this.configData[1][key] = (typeof itemDefaultValue === 'string' || typeof itemDefaultValue === 'number' || typeof itemDefaultValue === 'boolean') ? itemDefaultValue : '';
-                 }
-             });
-
-             (this.currentConfigDefinition?.gptprompt || []).forEach(promptItem => {
-                 const key = Object.keys(promptItem)[0];
-                 if (this.configData[key] === undefined || this.configData[key] === null) {
-                     // Initialize gptprompt keys with their default values from definition
-                     this.configData[key] = promptItem[key] || ''; // Use default from definition
-                 }
-             });
-
-             if (this.currentConfigDefinition?.localproxy === true && typeof this.configData.useLocalProxy === 'undefined') {
-                 this.configData.useLocalProxy = false;
-             }
-
-        } catch (error) {
-            console.error(`Error loading data for config ${this.selectedConfigName}:`, error);
-            this.showMessageBubble('error', `加载配置 "${this.selectedConfigName}" 的数据失败`);
-            this.configData = {}; // Reset on error
-            // Re-initialize concurrency and proxy defaults if definition allows, even after error
-            if (this.currentConfigDefinition?.allow_concurrency === true) {
-                 this.configData.concurrency = 1;
-            }
-             if (this.currentConfigDefinition?.localproxy === true) {
-                 this.configData.useLocalProxy = false;
-            }
-        }
-    },
-
-    async saveConfigData() {
-        if (!this.selectedConfigName || !this.currentConfigDefinition) {
-            this.showMessageBubble('error', '没有选中的配置可保存');
-            return;
-        }
-
-        // Validate concurrency value before saving if enabled
-        if (this.currentConfigDefinition.allow_concurrency === true) {
-            const concurrencyValue = this.configData.concurrency;
-            if (typeof concurrencyValue !== 'number' || !Number.isInteger(concurrencyValue) || concurrencyValue <= 0) {
-                this.showMessageBubble('error', '并发数必须是大于0的整数，请修正后保存。');
-                // Reset to 1 or previous valid value if needed, but for now just prevent save.
-                // this.configData.concurrency = 1; // Or revert to previous valid state if stored
-                return;
-            }
-        }
-
-
-        const fileSavePromises = [];
-        for (const key in this.filesToSave) {
-            const file = this.filesToSave[key];
-            if (file instanceof File) {
-                // Construct path: /data/tts_config_name/filename
-                const filePath = `/data/tts_${this.selectedConfigName}/${file.name}`;
-                fileSavePromises.push(
-                    createFolder(`/data/tts_${this.selectedConfigName}`) // Ensure directory exists first
-                    .catch(err => {
-                        // Ignore if folder already exists, log other errors
-                        if (!err.message.includes('文件夹已存在') && !err.message.includes('Key already exists')) {
-                            console.warn(`创建文件目录时出错 (可能已存在): ${err.message}`);
-                         }
-                    })
-                    .then(() => writeFile(filePath, file)) // Then write the file
-                    .catch(err => {
-                        console.error(`Error writing file ${file.name} to ${filePath}:`, err);
-                        this.showMessageBubble('error', `保存文件 ${file.name} 失败: ${err.message}`);
-                        throw err; // Re-throw to fail Promise.all
-                    })
-                );
-            }
-        }
-
-        try {
-            await Promise.all(fileSavePromises);
-
-            // Save configData to localStorage
-            const saved = JSON.parse(localStorage.getItem(LS_KEY) || '{}');
-            if (!saved[SOVITS_KEY]) {
-                saved[SOVITS_KEY] = {};
-            }
-            // Save a deep copy of the current data
-            // Include concurrency value if present in configData
-            saved[SOVITS_KEY][this.selectedConfigName] = JSON.parse(JSON.stringify(this.configData));
-            localStorage.setItem(LS_KEY, JSON.stringify(saved));
-
-            this.filesToSave = {}; // Clear pending files
-            this.showMessageBubble('success', `配置 "${this.selectedConfigName}" 的数据已保存`);
-
-        } catch (error) {
-            console.error('Error saving config data or files:', error);
-             // Avoid double message if file write failed (Promise.all will catch it)
-             if (fileSavePromises.length === 0 || !fileSavePromises.some(p => p.status === 'rejected')) { // Check if any file save explicitly rejected
-                this.showMessageBubble('error', `保存配置 "${this.selectedConfigName}" 数据失败`);
-            }
-        }
-    },
-
-
-    // --- Dynamic Input Getters/Setters ---
-    getDataKey(index, emotion) {
-        // Use index + 1 as the key (matches story JSON 1-based indexing)
-        // Only append emotion if emotions are configured in the definition and a non-empty emotion is provided
-         const hasEmotionsConfigured = Array.isArray(this.currentConfigDefinition?.emotion_list) && this.currentConfigDefinition.emotion_list.length > 0;
-        return hasEmotionsConfigured && emotion ? `${index}_${emotion}` : `${index}`;
-    },
-
-    getInputValue(index, emotion, itemKey) {
-        const dataKey = this.getDataKey(index, emotion);
-        // Check if configData[dataKey] exists before accessing itemKey
-        return this.configData[dataKey]?.[itemKey] || '';
-    },
-
-    setInputValue(value, index, emotion, itemKey) {
-        const dataKey = this.getDataKey(index, emotion);
-        // Vue 3: Use $set for reactivity with nested objects
-        if (!this.configData[dataKey]) {
-            // Note: While $set is technically for Vue 2, directly assigning properties to
-            // an existing reactive object *usually* works in Vue 3 Composition API
-            // or when the parent object is reactive. For clarity and compatibility,
-            // especially with potentially empty configData[dataKey], ensure reactivity.
-            // Using `this.$set` is safe, or ensure `configData` is initialized properly.
-            // Let's stick to direct assignment as `configData` itself is reactive.
-            this.configData[dataKey] = this.configData[dataKey] || {}; // Ensure the object exists
-        }
-        // Ensure the target object is reactive or use a method that guarantees reactivity
-        // Vue 3 typically makes nested objects reactive upon access/assignment to the reactive parent
-        this.configData[dataKey][itemKey]=value;
-
-        // Ensure reactivity update if needed (sometimes necessary for deeply nested or new properties)
-        // This is more for Vue 2, but can sometimes help ensure view updates in edge cases in Vue 3 reactivity nuances.
-        // Consider if `this.$set` is still preferred or if a direct assignment is sufficient.
-        // For typical data structures loaded from JSON, direct assignment like `this.configData[dataKey][itemKey] = value;` should be reactive in Vue 3
-        // if `this.configData` is properly reactive and `dataKey` already exists or is assigned an object.
-        // Since we ensure `this.configData[dataKey]` is an object, this direct assignment *should* work.
-    },
-
-
-    handleFileSelect(event, index, emotion, itemKey) {
-        const file = event.target.files[0];
-        if (!file) return;
-
-        const dataKey = this.getDataKey(index, emotion);
-        const fileStorageKey = `${dataKey}_${itemKey}`;
-
-        // Ensure the target object for reactivity exists before setting the value
-         if (!this.configData[dataKey]) {
-             this.configData[dataKey] = {};
-         }
-        this.configData[dataKey][itemKey] = file.name; // Set file name string in configData
-
-        this.filesToSave[fileStorageKey] = file; // Store the actual file object separately
-        event.target.value = null; // Clear input value so selecting the same file triggers change event next time
-    },
-
-    // --- UI Helpers ---
-    switchEmotion(emotion) {
-        this.currentEmotion = emotion;
-    },
-
-    applyFilling(itemKey) {
-        if (!this.currentConfigDefinition || this.numberOfEntries <= 1) return;
-
-        const firstDataKey = this.getDataKey(1, this.currentEmotion);
-        // Ensure the source data key exists before accessing
-        if (!this.configData[firstDataKey]) {
-             this.showMessageBubble('warning', `序号1的配置数据不存在，无法填充`);
-             return;
-        }
-        const valueToFill = this.configData[firstDataKey][itemKey];
-
-
-        // Check for null/undefined/empty string as values to fill
-        if (typeof valueToFill === 'undefined' || valueToFill === null || valueToFill === '') {
-            this.showMessageBubble('warning', `序号1的 "${this.requiredItems.find(i => i.key === itemKey)?.label}" 为空，无法填充`);
-            return;
-        }
-
-        let filledCount = 0;
-        for (let i = 2; i <= this.numberOfEntries; i++) {
-             const targetDataKey = this.getDataKey(i, this.currentEmotion);
-
-              // Ensure the target data key object exists for reactivity
-             if (!this.configData[targetDataKey]) {
-                 this.configData[targetDataKey] = {};
-             }
-
-             // Only fill if the target is currently empty or different from the source value
-             if (this.getInputValue(i, this.currentEmotion, itemKey) !== valueToFill) {
-                 // Directly assign to ensure reactivity after ensuring the parent object exists
-                 this.configData[targetDataKey][itemKey] = valueToFill;
-                 filledCount++;
-
-                 // If it's a fileselect, remove any pending file for the target index
-                 if(this.requiredItems.find(item => item.key === itemKey)?.type === 'fileselect') {
-                     const fileStorageKey = `${targetDataKey}_${itemKey}`;
-                     if (this.filesToSave[fileStorageKey]) {
-                        delete this.filesToSave[fileStorageKey];
-                     }
-                 }
-             }
-        }
-
-        if (filledCount > 0) {
-            this.showMessageBubble('success', `"${this.requiredItems.find(i => i.key === itemKey)?.label}" 已从序号1填充至 ${filledCount} 行`);
+        // Ensure concurrency has a default if needed
+        if (this.currentConfigDefinition?.allow_concurrency === true) {
+          const loadedConcurrency = loadedData.concurrency;
+          // Initialize or correct concurrency
+          if (typeof loadedConcurrency !== 'number' || !Number.isInteger(loadedConcurrency) || loadedConcurrency <= 0) {
+            loadedData.concurrency = 1; // Default to 1
+          }
         } else {
-             this.showMessageBubble('info', `所有行的 "${this.requiredItems.find(i => i.key === itemKey)?.label}" 已与序号1相同`);
+           // Remove concurrency if not allowed by definition
+          delete loadedData.concurrency;
+        }
+
+        // Initialize useLocalProxy if needed
+        if (this.currentConfigDefinition?.localproxy === true && typeof loadedData.useLocalProxy === 'undefined') {
+          loadedData.useLocalProxy = false; // Default to false
+        } else if (this.currentConfigDefinition?.localproxy !== true) {
+           // Remove proxy setting if not allowed by definition
+           delete loadedData.useLocalProxy;
+        }
+
+        // Initialize GPT prompts if needed
+        (this.currentConfigDefinition?.gptprompt || []).forEach(promptItem => {
+          const key = Object.keys(promptItem)[0];
+          if (loadedData[key] === undefined || loadedData[key] === null) {
+            loadedData[key] = promptItem[key] || ''; // Use default from definition or empty string
+          }
+        });
+
+        // Set the configData
+        this.configData = JSON.parse(JSON.stringify(loadedData)); // Deep clone
+
+      } catch (error) {
+        console.error(`Error loading data for config ${this.selectedConfigName}:`, error);
+        this.showMessageBubble('error', `加载配置 "${this.selectedConfigName}" 的数据失败`);
+        // Initialize with defaults based on definition
+        this.configData = {};
+        if (this.currentConfigDefinition?.allow_concurrency === true) {
+          this.configData.concurrency = 1;
+        }
+        if (this.currentConfigDefinition?.localproxy === true) {
+          this.configData.useLocalProxy = false;
+        }
+        (this.currentConfigDefinition?.gptprompt || []).forEach(promptItem => {
+           const key = Object.keys(promptItem)[0];
+           this.configData[key] = promptItem[key] || '';
+        });
+      }
+    },
+    async saveConfigData() {
+      if (!this.selectedConfigName || !this.currentConfigDefinition) {
+        this.showMessageBubble('error', '没有选中的配置可保存');
+        return;
+      }
+      if (this.currentConfigDefinition.allow_concurrency === true) {
+        const concurrencyValue = this.configData.concurrency;
+        if (typeof concurrencyValue !== 'number' || !Number.isInteger(concurrencyValue) || concurrencyValue <= 0) {
+          this.showMessageBubble('error', '并发数必须是大于0的整数，请修正后保存。');
+          return;
+        }
+      }
+
+      const fileSavePromises = [];
+      for (const key in this.filesToSave) {
+        const file = this.filesToSave[key];
+        if (file instanceof File) {
+          const filePath = `/data/tts_${this.selectedConfigName}/${file.name}`;
+          fileSavePromises.push(
+            createFolder(`/data/tts_${this.selectedConfigName}`)
+              .catch(err => {
+                if (!err.message.includes('文件夹已存在') && !err.message.includes('Key already exists')) {
+                  console.warn(`创建文件目录时出错 (可能已存在): ${err.message}`);
+                }
+              })
+              .then(() => writeFile(filePath, file))
+              .catch(err => {
+                console.error(`Error writing file ${file.name} to ${filePath}:`, err);
+                this.showMessageBubble('error', `保存文件 ${file.name} 失败: ${err.message}`);
+                throw err; // Propagate error to stop saving data if file save fails
+              })
+          );
+        }
+      }
+
+      try {
+        await Promise.all(fileSavePromises); // Wait for all files to be saved
+
+        // Now save the config data to localStorage
+        const saved = JSON.parse(localStorage.getItem(LS_KEY) || '{}');
+        if (!saved[SOVITS_KEY]) {
+          saved[SOVITS_KEY] = {};
+        }
+        // Save a deep copy of the current config data
+        saved[SOVITS_KEY][this.selectedConfigName] = JSON.parse(JSON.stringify(this.configData));
+        localStorage.setItem(LS_KEY, JSON.stringify(saved));
+
+        this.filesToSave = {}; // Clear pending files after successful save
+        this.showMessageBubble('success', `配置 "${this.selectedConfigName}" 的数据已保存`);
+      } catch (error) {
+        console.error('Error saving config data or files:', error);
+        // Don't show generic error if file save error was already shown
+        if (!error.message.startsWith('保存文件')) {
+             this.showMessageBubble('error', `保存配置 "${this.selectedConfigName}" 数据失败: ${error.message}`);
+        }
+      }
+    },
+    getDataKey(index, emotion) {
+      const hasEmotionsConfigured = Array.isArray(this.currentConfigDefinition?.emotion_list) && this.currentConfigDefinition.emotion_list.length > 0;
+      // Use the actual emotion string, even if it's empty for default
+      return hasEmotionsConfigured ? `${index}_${emotion || 'default_emotion_placeholder'}` : `${index}`;
+    },
+    getInputValue(index, emotion, itemKey) {
+      // Handle empty emotion string correctly
+      const effectiveEmotion = emotion === '' ? 'default_emotion_placeholder' : emotion;
+      const dataKey = this.getDataKey(index, effectiveEmotion);
+      return this.configData[dataKey]?.[itemKey] || '';
+    },
+    setInputValue(value, index, emotion, itemKey) {
+       // Handle empty emotion string correctly
+      const effectiveEmotion = emotion === '' ? 'default_emotion_placeholder' : emotion;
+      const dataKey = this.getDataKey(index, effectiveEmotion);
+      if (!this.configData[dataKey]) {
+        // Vue 3 reactivity should handle this, but Vue.set was needed in Vue 2
+        this.configData[dataKey] = {};
+      }
+      this.configData[dataKey][itemKey] = value;
+    },
+    handleFileSelect(event, index, emotion, itemKey) {
+      const file = event.target.files[0];
+      if (!file) return;
+      // Handle empty emotion string correctly
+      const effectiveEmotion = emotion === '' ? 'default_emotion_placeholder' : emotion;
+      const dataKey = this.getDataKey(index, effectiveEmotion);
+      const fileStorageKey = `${dataKey}_${itemKey}`; // Key for filesToSave map
+
+      if (!this.configData[dataKey]) {
+         this.configData[dataKey] = {};
+      }
+      // Store only the filename in configData
+      this.configData[dataKey][itemKey] = file.name;
+      // Store the actual File object to be saved later
+      this.filesToSave[fileStorageKey] = file;
+
+      // Reset file input to allow selecting the same file again if needed
+      event.target.value = null;
+    },
+    // --- END Existing Methods (Keep as is) ---
+
+    // --- UI Helpers --- (KEEP EXISTING methods: switchEmotion, applyFilling, getColumnFlex)
+    // --- START Existing Methods (Keep as is) ---
+    switchEmotion(emotion) {
+      this.currentEmotion = emotion;
+    },
+    applyFilling(itemKey) {
+      if (!this.currentConfigDefinition || this.numberOfEntries <= 1) return;
+
+      // Handle empty emotion string correctly for getting data
+      const effectiveEmotion = this.currentEmotion === '' ? 'default_emotion_placeholder' : this.currentEmotion;
+      const firstDataKey = this.getDataKey(1, effectiveEmotion);
+
+      if (!this.configData[firstDataKey] || this.configData[firstDataKey][itemKey] === undefined) {
+        this.showMessageBubble('warning', `序号1的 "${this.requiredItems.find(i => i.key === itemKey)?.label}" 数据不存在，无法填充`);
+        return;
+      }
+
+      const valueToFill = this.configData[firstDataKey][itemKey];
+
+      // Check if value is meaningfully empty (allow filling 'false' or 0)
+      if (valueToFill === null || valueToFill === '') {
+        this.showMessageBubble('warning', `序号1的 "${this.requiredItems.find(i => i.key === itemKey)?.label}" 为空，无法填充`);
+        return;
+      }
+
+      let filledCount = 0;
+      const isFileSelect = this.requiredItems.find(item => item.key === itemKey)?.type === 'fileselect';
+
+      for (let i = 2; i <= this.numberOfEntries; i++) {
+        const targetDataKey = this.getDataKey(i, effectiveEmotion);
+        if (!this.configData[targetDataKey]) {
+           this.configData[targetDataKey] = {};
+        }
+
+        // Check if the value needs updating
+        if (this.configData[targetDataKey][itemKey] !== valueToFill) {
+          this.configData[targetDataKey][itemKey] = valueToFill;
+          filledCount++;
+
+          // If it's a file select, we need to copy the *reference* (filename),
+          // but potentially clear any pending file *upload* for the target row.
+          // The actual file isn't copied here, only its name reference.
+          if (isFileSelect) {
+            const targetFileStorageKey = `${targetDataKey}_${itemKey}`;
+            // If there was a different file staged for upload for this target row, remove it.
+            // We assume the user wants to use the file referenced by row 1.
+            if (this.filesToSave[targetFileStorageKey]) {
+              delete this.filesToSave[targetFileStorageKey];
+              // We might need to find the original File object from row 1 if it was staged
+              // const sourceFileStorageKey = `${firstDataKey}_${itemKey}`;
+              // if (this.filesToSave[sourceFileStorageKey]) {
+              //    this.filesToSave[targetFileStorageKey] = this.filesToSave[sourceFileStorageKey]; // This might be complex if not just saving
+              // }
+              // Simpler: Just set the filename. Assume the file from row 1 already exists or will be handled separately.
+            }
+          }
+        }
+      }
+      if (filledCount > 0) {
+        this.showMessageBubble('success', `"${this.requiredItems.find(i => i.key === itemKey)?.label}" 已从序号1填充至 ${filledCount} 行`);
+      } else {
+        this.showMessageBubble('info', `所有行的 "${this.requiredItems.find(i => i.key === itemKey)?.label}" 已与序号1相同`);
+      }
+    },
+    getColumnFlex(itemKey) {
+      // Adjust flex values as needed for layout
+      if (itemKey === 'reference_text') return 3;
+      const itemDefinition = this.requiredItems.find(item => item.key === itemKey);
+      if (itemDefinition?.type === 'fileselect') return 3; // Check type property
+      if (itemKey === 'model' || itemKey === 'modelname') return 2;
+      return 2; // Default flex
+    },
+    // --- END Existing Methods (Keep as is) ---
+
+    // --- JSON Definition Handling --- (KEEP EXISTING methods: quoteVariables, unquoteVariables, validateConfigJson)
+    // --- START Existing Methods (Keep as is) ---
+     quoteVariables(jsonObj) {
+        // Ensure the input is treated as an object
+        if (jsonObj === null || typeof jsonObj !== 'object') return jsonObj;
+
+        // Deep clone the object to avoid modifying the original
+        let objToQuote = JSON.parse(JSON.stringify(jsonObj));
+
+        const quoteRecursive = (data) => {
+          if (typeof data === 'string') {
+            // Check if the string is exactly in the format "{{variable}}"
+            if (/^\{\{\s*[\w.]+\s*\}\}$/.test(data)) {
+              // Return the string wrapped in JSON quotes (escaped)
+              return `"${data}"`; // Wrap in quotes to make it a JSON string literal
+            }
+            // Otherwise, return the original string (it will be quoted by JSON.stringify later if needed)
+            return data;
+          } else if (Array.isArray(data)) {
+            // Recursively process each item in the array
+            return data.map(item => quoteRecursive(item));
+          } else if (data !== null && typeof data === 'object') {
+             // Recursively process each value in the object
+            const newObj = {};
+            for (const key in data) {
+              if (Object.hasOwnProperty.call(data, key)) {
+                newObj[key] = quoteRecursive(data[key]);
+              }
+            }
+            return newObj;
+          }
+          // Return non-string, non-array, non-object values as is
+          return data;
+        };
+
+        try {
+            // Process the object recursively
+            const processedObj = quoteRecursive(objToQuote);
+
+            // Convert the processed structure back to a string, then parse it to get the final object
+            // This relies on JSON.parse correctly handling the '"{{variable}}"' strings we created
+            let jsonString = JSON.stringify(processedObj);
+
+            // Replace the explicitly quoted variables '"{{variable}}"' with just "{{variable}}"
+            // Use a regex to find these patterns and unwrap them
+             jsonString = jsonString.replace(/"(\{\{\s*[\w.]+\s*\}\})"/g, (match, p1) => p1);
+
+
+            // Parse the modified string back into a JavaScript object
+            return JSON.parse(jsonString);
+
+        } catch (e) {
+            console.error("Error quoting variables:", e, jsonObj);
+            // Return the original object in case of error
+            return JSON.parse(JSON.stringify(jsonObj));
         }
     },
-
-
-    getColumnFlex(itemKey) {
-        // Adjust flex based on item key or type
-        if (itemKey === 'reference_text') return 3; // Text area like inputs
-        if (itemKey === 'fileselect') return 3; // File select inputs often need more space
-        if (itemKey === 'model' || itemKey === 'modelname') return 2; // Model identifiers
-        // Default flex for other text inputs
-        return 2;
+     unquoteVariables(jsonObj) { // Kept for potential direct use, but unquoteVariablesDeep is preferred
+        if (jsonObj === null || typeof jsonObj !== 'object') return jsonObj;
+        try {
+             // The deep version handles nested structures
+            return unquoteVariablesDeep(jsonObj);
+        } catch (e) {
+            console.error("Error unquoting variables:", e, jsonObj);
+            // Return a deep copy of the original object in case of error
+            return JSON.parse(JSON.stringify(jsonObj));
+        }
     },
-
-    // --- JSON Definition Handling ---
-    // Quote variables inside string *values* like "key": "{{variable}}" -> "key": "\"{{variable}}\""
-    // This function prepares the definition for localStorage storage to avoid JSON.parse issues later
-    quoteVariables(jsonObj) {
-         try {
-             // Use unquoteVariablesDeep first to ensure variables are {{var}} not "{{var}}"
-             // This prevents double quoting if a user manually quoted in the editor.
-             let unquotedObj = unquoteVariablesDeep(jsonObj);
-
-             // Now, recursively traverse the object and quote any string value that is exactly {{variable}}
-             const quoteRecursive = (data) => {
-                 if (typeof data === 'string') {
-                     // Check if the string value is *exactly* a variable placeholder
-                     if (/^{{\s*\w+\s*}}$/.test(data)) {
-                         // Quote the string value
-                         return JSON.stringify(data); // This adds the quotes and escapes inner quotes if any (though not expected here)
-                     }
-                     return data; // Return original string if not a variable placeholder
-                 } else if (Array.isArray(data)) {
-                     return data.map(item => quoteRecursive(item));
-                 } else if (data !== null && typeof data === 'object') {
-                     const newObj = {};
-                     for (const key in data) {
-                         if (Object.hasOwnProperty.call(data, key)) {
-                             newObj[key] = quoteRecursive(data[key]);
-                         }
-                     }
-                     return newObj;
-                 }
-                 return data;
-             };
-
-             return quoteRecursive(unquotedObj);
-
-         } catch (e) {
-             console.error("Error quoting variables:", e);
-             // Return original if error, but this could lead to subtle issues on load later
-             return jsonObj;
-         }
-    },
-
-    // Unquote variables from string *values* like "key": "\"{{variable}}\"" -> "key": "{{variable}}"
-    // This function prepares the definition loaded from localStorage for use (editing, logic)
-    unquoteVariables(jsonObj) {
-         // Use the robust deep unquoting function from voiceGenerator
-         try {
-             return unquoteVariablesDeep(jsonObj);
-         } catch (e) {
-              console.error("Error unquoting variables:", e);
-              // Return a deep clone of the original object if error
-              return JSON.parse(JSON.stringify(jsonObj));
-         }
-    },
-
     validateConfigJson(jsonString) {
         let parsedJson;
         try {
@@ -834,950 +840,1391 @@ export default {
             return { isValid: false, message: `JSON 格式无效: ${e.message}` };
         }
 
-        // Basic required keys check
+        // --- Basic Structure Validation ---
         const requiredKeys = ['number', 'required_item', 'url'];
         for (const key of requiredKeys) {
             if (!(key in parsedJson)) {
-                return { isValid: false, message: `缺少必需的配置项: ${key}` };
+            return { isValid: false, message: `缺少必需的配置项: ${key}` };
             }
         }
-        // Validate basic types and content
+        if (typeof parsedJson.number !== 'number' || !Number.isInteger(parsedJson.number) || parsedJson.number <= 0) {
+            return { isValid: false, message: `number 必须是正整数` };
+        }
         if (!Array.isArray(parsedJson.required_item) || parsedJson.required_item.length === 0) {
             return { isValid: false, message: `required_item 必须是非空数组` };
         }
-         // Ensure number is a positive integer
-       if (typeof parsedJson.number !== 'number' || !Number.isInteger(parsedJson.number) || parsedJson.number <= 0) {
-            return { isValid: false, message: `number 必须是正整数` };
-       }
-       if (typeof parsedJson.url !== 'string' || parsedJson.url.trim() === '') {
+        // Validate structure of required_item elements
+        for(let i=0; i < parsedJson.required_item.length; i++) {
+            const item = parsedJson.required_item[i];
+            if (typeof item !== 'object' || item === null || Array.isArray(item) || Object.keys(item).length !== 1) {
+                 return { isValid: false, message: `required_item 数组的第 ${i+1} 个元素格式无效，应为 {"key": "label"} 形式` };
+            }
+            const key = Object.keys(item)[0];
+            if (typeof item[key] !== 'string') {
+                return { isValid: false, message: `required_item 数组的第 ${i+1} 个元素的标签值必须是字符串` };
+            }
+            // Check for optional 'filling' or 'fileselect' properties (only one key + optional properties)
+            let propCount = 1;
+            if (item.hasOwnProperty('filling')) {
+                if (typeof item.filling !== 'boolean') return { isValid: false, message: `required_item 数组的第 ${i+1} 个元素的 filling 属性必须是布尔值` };
+                propCount++;
+            }
+             if (item.hasOwnProperty('fileselect')) {
+                if (typeof item.fileselect !== 'boolean') return { isValid: false, message: `required_item 数组的第 ${i+1} 个元素的 fileselect 属性必须是布尔值` };
+                 propCount++;
+            }
+            // Allow only the main key and optional boolean flags
+             if (Object.keys(item).length > propCount) {
+                // Example: {"key": "label", "filling": true, "extra": "bad"}
+                const extraKeys = Object.keys(item).filter(k => k !== key && k !== 'filling' && k !== 'fileselect');
+                 if (extraKeys.length > 0) {
+                     return { isValid: false, message: `required_item 数组的第 ${i+1} 个元素包含无效属性: ${extraKeys.join(', ')}` };
+                 }
+            }
+
+        }
+
+        if (typeof parsedJson.url !== 'string' || parsedJson.url.trim() === '') {
             return { isValid: false, message: `url 必须是非空字符串` };
-       }
+        }
 
-       // Validate allow_concurrency if present
+        // Optional fields validation
         if ('allow_concurrency' in parsedJson && typeof parsedJson.allow_concurrency !== 'boolean') {
-             return { isValid: false, message: 'allow_concurrency 必须是布尔值 (true 或 false)' };
+            return { isValid: false, message: 'allow_concurrency 必须是布尔值 (true 或 false)' };
+        }
+         if ('localproxy' in parsedJson && typeof parsedJson.localproxy !== 'boolean') {
+            return { isValid: false, message: 'localproxy 必须是布尔值 (true 或 false)' };
+        }
+        if ('emotion_list' in parsedJson && !Array.isArray(parsedJson.emotion_list)) {
+             return { isValid: false, message: 'emotion_list 必须是字符串数组' };
+        }
+        if ('emotion_list' in parsedJson && Array.isArray(parsedJson.emotion_list)) {
+             if (!parsedJson.emotion_list.every(e => typeof e === 'string')) {
+                 return { isValid: false, message: 'emotion_list 数组中的所有元素必须是字符串' };
+             }
+        }
+        if ('emotion_feedback' in parsedJson && typeof parsedJson.emotion_feedback !== 'string') {
+             return { isValid: false, message: 'emotion_feedback 必须是字符串' };
+        }
+        if ('gptprompt' in parsedJson && !Array.isArray(parsedJson.gptprompt)) {
+             return { isValid: false, message: 'gptprompt 必须是数组' };
+        }
+         if ('gptprompt' in parsedJson && Array.isArray(parsedJson.gptprompt)) {
+             for(let i=0; i < parsedJson.gptprompt.length; i++) {
+                 const promptItem = parsedJson.gptprompt[i];
+                 if (typeof promptItem !== 'object' || promptItem === null || Array.isArray(promptItem) || Object.keys(promptItem).length !== 1) {
+                    return { isValid: false, message: `gptprompt 数组的第 ${i+1} 个元素格式无效，应为 {"key": "defaultValue"} 形式` };
+                 }
+                 const key = Object.keys(promptItem)[0];
+                 if (typeof promptItem[key] !== 'string') {
+                     return { isValid: false, message: `gptprompt 数组的第 ${i+1} 个元素的默认值必须是字符串` };
+                 }
+             }
         }
 
 
-        // Validate main URL request method/params/body consistency
-        const mainMethod = parsedJson.requestmethod ? parsedJson.requestmethod.toUpperCase() : 'GET';
+        // --- Request Structure Validation ---
+        const mainMethod = (parsedJson.requestmethod || 'GET').toUpperCase();
         const hasMainGet = Array.isArray(parsedJson.getparams) && parsedJson.getparams.length > 0;
-        // Check if body is present and not null/undefined
         const hasMainBody = parsedJson.body !== undefined && parsedJson.body !== null;
+
+        if (mainMethod !== 'GET' && mainMethod !== 'POST') {
+            return { isValid: false, message: `主请求的 requestmethod 必须是 "get" 或 "post"` };
+        }
         if (mainMethod === 'GET' && hasMainBody) {
-             return { isValid: false, message: 'requestmethod 是 GET 时，不应配置 body' };
+            return { isValid: false, message: '主请求 requestmethod 是 GET 时，不应配置 body' };
         }
-         if (mainMethod === 'POST' && hasMainGet) {
-             return { isValid: false, message: 'requestmethod 是 POST 时，不应配置 getparams' };
-         }
-         if (mainMethod !== 'GET' && mainMethod !== 'POST') {
-              return { isValid: false, message: `requestmethod 必须是 "get" 或 "post"` };
-         }
+        if (mainMethod === 'POST' && hasMainGet) {
+             // Allow GET params even for POST, some APIs use this (e.g., path/query params + body)
+            // return { isValid: false, message: '主请求 requestmethod 是 POST 时，不应配置 getparams' };
+            console.warn("Validation Warning: Main request is POST but also has getparams defined. This is allowed but potentially unusual.")
+        }
+        if (mainMethod === 'POST' && !hasMainBody) {
+            console.warn("Validation Warning: Main request is POST but has no body defined.");
+        }
 
-        // --- Validate before_requests array ---
+
+        // --- Before Requests Validation ---
         const beforeRequests = parsedJson.before_requests;
-        if (beforeRequests !== undefined && beforeRequests !== null) { // It's optional
-             if (!Array.isArray(beforeRequests)) {
-                 return { isValid: false, message: `before_requests 必须是数组` };
-             }
-             for (let i = 0; i < beforeRequests.length; i++) {
-                 const req = beforeRequests[i];
-                 if (req === null || typeof req !== 'object') {
-                     return { isValid: false, message: `before_requests 数组的第 ${i + 1} 个元素必须是对象` };
+        if (beforeRequests !== undefined && beforeRequests !== null) {
+            if (!Array.isArray(beforeRequests)) {
+            return { isValid: false, message: `before_requests 必须是数组` };
+            }
+            for (let i = 0; i < beforeRequests.length; i++) {
+                const req = beforeRequests[i];
+                if (req === null || typeof req !== 'object') {
+                    return { isValid: false, message: `before_requests 数组的第 ${i + 1} 个元素必须是对象` };
+                }
+                if (typeof req.url !== 'string' || req.url.trim() === '') {
+                    return { isValid: false, message: `before_requests 数组的第 ${i + 1} 个请求缺少或包含无效的 url` };
+                }
+                const reqMethod = (req.requestmethod || 'GET').toUpperCase();
+                if (reqMethod !== 'GET' && reqMethod !== 'POST') {
+                    return { isValid: false, message: `before_requests 数组的第 ${i + 1} 个请求的 requestmethod 必须是 "get" 或 "post"` };
+                }
+                const hasReqGet = Array.isArray(req.getparams) && req.getparams.length > 0;
+                const hasReqBody = req.body !== undefined && req.body !== null;
+                if (reqMethod === 'GET' && hasReqBody) {
+                    return { isValid: false, message: `before_requests 数组的第 ${i + 1} 个请求 requestmethod 是 GET 时，不应配置 body` };
+                }
+                if (reqMethod === 'POST' && hasReqGet) {
+                    // Allow GET params even for POST
+                     console.warn(`Validation Warning: Before request ${i+1} is POST but also has getparams defined.`)
+                    // return { isValid: false, message: `before_requests 数组的第 ${i + 1} 个请求 requestmethod 是 POST 时，不应配置 getparams` };
+                }
+                 if (reqMethod === 'POST' && !hasReqBody) {
+                    console.warn(`Validation Warning: Before request ${i+1} is POST but has no body defined.`);
                  }
-                 if (typeof req.url !== 'string' || req.url.trim() === '') {
-                      return { isValid: false, message: `before_requests 数组的第 ${i + 1} 个请求缺少或包含无效的 url` };
-                 }
-                 const reqMethod = req.requestmethod ? req.requestmethod.toUpperCase() : 'GET';
-                 if (reqMethod !== 'GET' && reqMethod !== 'POST') {
-                      return { isValid: false, message: `before_requests 数组的第 ${i + 1} 个请求的 requestmethod 必须是 "get" 或 "post"` };
-                 }
-                 const hasReqGet = Array.isArray(req.getparams) && req.getparams.length > 0;
-                 const hasReqBody = req.body !== undefined && req.body !== null;
-                 if (reqMethod === 'GET' && hasReqBody) {
-                     return { isValid: false, message: `before_requests 数组的第 ${i + 1} 个请求 requestmethod 是 GET 时，不应配置 body` };
-                 }
-                  if (reqMethod === 'POST' && hasReqGet) {
-                     return { isValid: false, message: `before_requests 数组的第 ${i + 1} 个请求 requestmethod 是 POST 时，不应配置 getparams` };
-                 }
-             }
+            }
         }
-        // --- End validation for before_requests ---
 
-
-        // Validate judge_repeat_before
+        // --- Judge Repeat Before Validation ---
         const judgeRepeatBefore = parsedJson.judge_repeat_before;
+        const allowedVarsForValidation = new Set([
+             ...(parsedJson.required_item || []).map(item => Object.keys(item)[0]),
+             'gptreturn', 'text', 'language' // Standard allowed variables
+             ]);
         if (judgeRepeatBefore !== undefined && judgeRepeatBefore !== null && judgeRepeatBefore !== "") {
             if (typeof judgeRepeatBefore !== 'string') {
                 return { isValid: false, message: `judge_repeat_before 必须是字符串` };
             }
-            // Check format: must be "{{param}}" exactly
-            const variableMatch = judgeRepeatBefore.match(/^\{\{\s*(\w+)\s*\}\}$/);
+            const variableMatch = judgeRepeatBefore.match(/^\{\{\s*([\w.]+)\s*\}\}$/); // Allow dot notation
             if (!variableMatch) {
-                 return { isValid: false, message: `judge_repeat_before 必须是空字符串或 "{{变量名}}" 的形式` };
+                return { isValid: false, message: `judge_repeat_before 必须是空字符串或 "{{变量名}}" 的形式` };
             }
             const variableName = variableMatch[1];
-            // Check if the variable name is allowed (from required_item, gptreturn, text, language)
-            if (!this.allowedVariables.has(variableName)) {
-                 return { isValid: false, message: `judge_repeat_before 中的变量 "{{${variableName}}}" 不允许。允许的变量有: ${[...this.allowedVariables].join(', ')}` };
+
+            if (!allowedVarsForValidation.has(variableName)) {
+                return { isValid: false, message: `judge_repeat_before 中的变量 "{{${variableName}}}" 不允许。允许的变量: ${[...allowedVarsForValidation].join(', ')}` };
             }
-             // If judge_repeat_before is set, allow_concurrency must be true
-             if (parsedJson.allow_concurrency !== true) {
-                  return { isValid: false, message: `如果定义了 judge_repeat_before，则 allow_concurrency 必须设置为 true 以启用并发控制。` };
-             }
-        } else {
-             // judge_repeat_before is optional or empty, no further validation needed for its content
+            if (parsedJson.allow_concurrency !== true) {
+                return { isValid: false, message: `如果定义了 judge_repeat_before，则 allow_concurrency 必须设置为 true 以启用并发控制。` };
+            }
         }
 
-
-        // Validate variable usage in url, getparams, body, and all before_requests parts
+        // --- Variable Usage Validation ---
         const errors = [];
-        const allowedVars = this.allowedVariables; // Use computed property
-
-        // Helper to find variables in a structure
         const findVariablesInStructure = (struct) => {
             const vars = new Set();
-            // Regex to find {{ variable }} anywhere in a string
-            const regex = /{{\s*(\w+)\s*}}/g;
+            const regex = /{{\s*([\w.]+)\s*}}/g; // Allow dot notation e.g. {{headers.content-type}}
 
             const process = (item) => {
-                if (typeof item === 'string') {
-                    let match;
-                    // Use exec in a loop to find all matches
-                    while ((match = regex.exec(item)) !== null) {
-                        vars.add(match[1]);
-                    }
-                    // Reset regex lastIndex if needed (though for simple global regex it's fine)
-                    regex.lastIndex = 0;
-
-                } else if (Array.isArray(item)) {
-                    item.forEach(process);
-                } else if (item !== null && typeof item === 'object') {
-                    for (const key in item) {
-                         if (Object.hasOwnProperty.call(item, key)) {
-                             process(item[key]);
-                         }
+            if (typeof item === 'string') {
+                let match;
+                while ((match = regex.exec(item)) !== null) {
+                vars.add(match[1]); // Add the full variable name (e.g., 'user.name')
+                }
+                regex.lastIndex = 0; // Reset regex state
+            } else if (Array.isArray(item)) {
+                item.forEach(process);
+            } else if (item !== null && typeof item === 'object') {
+                // Process both keys and values in objects, as keys might contain variables too
+                for (const key in item) {
+                    if (Object.hasOwnProperty.call(item, key)) {
+                        process(key); // Check key itself for variables
+                        process(item[key]); // Check value
                     }
                 }
+            }
             };
 
-            // Check main config parts
+            // Process relevant parts of the config
             process(parsedJson.url);
-            process(parsedJson.requestmethod); // check method string too just in case
             process(parsedJson.getparams);
             process(parsedJson.body);
-
-            // Check before_requests parts if array exists
             if (Array.isArray(parsedJson.before_requests)) {
-                 parsedJson.before_requests.forEach(req => {
-                     if (req && typeof req === 'object') {
-                         process(req.url);
-                         process(req.requestmethod); // check method string too just in case
-                         process(req.getparams);
-                         process(req.body);
-                     }
-                 });
-            }
-
-            // Check judge_repeat_before itself if it's a variable string
-             if (judgeRepeatBefore && typeof judgeRepeatBefore === 'string') {
-                const variableMatch = judgeRepeatBefore.match(/^\{\{\s*(\w+)\s*\}\}$/);
-                if (variableMatch) {
-                     vars.add(variableMatch[1]); // Add the variable name found in judge_repeat_before
+            parsedJson.before_requests.forEach(req => {
+                if (req && typeof req === 'object') {
+                process(req.url);
+                process(req.getparams);
+                process(req.body);
                 }
-             }
+            });
+            }
+             // Don't check judge_repeat_before here, it was checked specifically above
 
             return vars;
         };
 
-        const usedVars = findVariablesInStructure(parsedJson); // Check the entire parsed JSON structure
+        const usedVars = findVariablesInStructure(parsedJson);
 
         for (const variable of usedVars) {
-            if (!allowedVars.has(variable)) {
-                // Only add error if the variable is NOT allowed.
-                // The judge_repeat_before specific check already happened above.
-                // Remove the specific judge_repeat_before check here as it's already validated above.
-                 errors.push(`不允许或未定义的变量: {{${variable}}}. 允许的变量可能来自 required_item, gptreturn, text, language.`);
+             // Simple check: does the base variable name exist?
+            // Doesn't validate dot notation paths deeply, but checks the root.
+            const baseVariable = variable.split('.')[0];
+            if (!allowedVarsForValidation.has(baseVariable)) {
+                errors.push(`不允许或未定义的变量: {{${variable}}}. 允许的基础变量: ${[...allowedVarsForValidation].join(', ')}.`);
             }
         }
 
         if (errors.length > 0) {
-            // Filter unique errors
-            return { isValid: false, message: [...new Set(errors)].join('; ') };
+             // Remove duplicates
+             const uniqueErrors = [...new Set(errors)];
+            return { isValid: false, message: uniqueErrors.join('; ') };
         }
 
-        // Return the original parsed JSON
+        // If all checks pass
         return { isValid: true, message: 'JSON 定义有效', parsedJson };
     },
+    // --- END Existing Methods (Keep as is) ---
 
 
-    // ***** NEW: Method to revoke existing Blob URLs *****
+    // --- Audio Handling ---
     revokeTestAudioUrls() {
-        if (this.blobUrlShort) {
-            URL.revokeObjectURL(this.blobUrlShort);
-            this.blobUrlShort = null;
-            this.testShortAudioSrc = null; // Clear src as well
-        }
-        if (this.blobUrlLong) {
-            URL.revokeObjectURL(this.blobUrlLong);
-            this.blobUrlLong = null;
-            this.testLongAudioSrc = null; // Clear src as well
-        }
+      if (this.blobUrlShort) {
+        URL.revokeObjectURL(this.blobUrlShort);
+        this.blobUrlShort = null;
+        this.testShortAudioSrc = null;
+      }
+      if (this.blobUrlLong) {
+        URL.revokeObjectURL(this.blobUrlLong);
+        this.blobUrlLong = null;
+        this.testLongAudioSrc = null;
+      }
     },
-    // --------------------------------------------------
 
-    // ***** NEW: Test Configuration Method *****
+    // ***** UPDATED: Test Configuration Method *****
     async testCurrentConfig() {
-        if (!this.selectedConfigName || !this.currentConfigDefinition) {
-            this.showMessageBubble('warning', '请先选择一个要测试的配置');
-            return;
-        }
-        if (this.isTesting) {
-            return; // Prevent multiple simultaneous tests
-        }
+      if (!this.selectedConfigName || !this.currentConfigDefinition) {
+        this.showMessageBubble('warning', '请先选择一个要测试的配置');
+        return;
+      }
+      // Check if selectedTestIndex is valid
+      if (this.numberOfEntries < 1 || this.selectedTestIndex < 1 || this.selectedTestIndex > this.numberOfEntries) {
+        this.showMessageBubble('warning', `无效的测试序号: ${this.selectedTestIndex} (总条目: ${this.numberOfEntries})`);
+        return;
+      }
+      if (this.isTesting) {
+        return; // Prevent multiple simultaneous tests
+      }
 
-        this.isTesting = true;
-        this.testError = null;
-        // Revoke previous URLs before starting new test
-        this.revokeTestAudioUrls();
-        this.showMessageBubble('info', '开始测试语音生成...');
+      this.isTesting = true;
+      this.testError = null;
+      this.revokeTestAudioUrls(); // Revoke previous URLs
+      this.showMessageBubble('info', `开始测试语音生成 (序号 ${this.selectedTestIndex})...`);
 
-        // Test parameters
-        const nameId = 1; // Use first entry config (1-based index)
-        const lang = "zh"; // Assume Chinese for test text
-        const testEmotion = this.currentEmotion || (this.emotionsToConfigure.length > 0 ? this.emotionsToConfigure[0] : ''); // Use current UI emotion or default
+      // Test parameters
+      const nameId = this.selectedTestIndex; // Use selected index
+      const lang = "zh"; // Assume Chinese for test text
 
-        // For testing, use the local proxy setting from configData
-        const useLocalProxy = this.configData?.useLocalProxy === true;
+      // The {{gptreturn}} variable value comes from the test input field
+      const gptReturnValueForTest = this.testGptReturnValue;
 
-        try {
-            // --- Prepare Variables Map for Test (using index 1 data) ---
-            // This map is needed for both before_requests and main url substitutions for the test case (index 1, current emotion)
-             const testVariablesMap = {};
-             testVariablesMap['language'] = lang; // Add language variable
-             // Note: The test text ("测试") and long text are added *later* specifically for the main request calls.
-             // They are NOT part of the map used for *before_requests*.
-             testVariablesMap['gptreturn'] = testEmotion; // Use the emotion chosen for the test
+      // Determine if local proxy should be used based on current config data
+      const useLocalProxy = this.configData?.useLocalProxy === true && this.currentConfigDefinition?.localproxy === true;
 
-             // Determine the data key based on test index (1) and test emotion
-            const hasEmotionsConfigured = Array.isArray(this.currentConfigDefinition?.emotion_list) && this.currentConfigDefinition.emotion_list.length > 0;
-            // Determine the effective emotion for the data key look based on testEmotion and configured emotion list
-            let emotionUsedForKey = ''; // Default to empty string
-             if (hasEmotionsConfigured) {
-                  const emotionList = this.currentConfigDefinition.emotion_list || [];
-                  let effectiveEmotion = testEmotion || '';
+      try {
+        // --- Prepare Variables Map for Test (using selected index data) ---
+        const testVariablesMap = {};
+        testVariablesMap['language'] = lang;
+        // ***** Use the value from the new input field for the {{gptreturn}} variable *****
+        testVariablesMap['gptreturn'] = gptReturnValueForTest;
 
-                  if (effectiveEmotion === '' || !emotionList.includes(effectiveEmotion)) {
-                      const feedbackEmotion = this.currentConfigDefinition?.emotion_feedback;
-                       if (typeof feedbackEmotion === 'string' && feedbackEmotion !== '' && emotionList.includes(feedbackEmotion)) {
-                          effectiveEmotion = feedbackEmotion;
-                       }
-                  }
-                   emotionUsedForKey = effectiveEmotion;
-             }
-             const dataKey = hasEmotionsConfigured && emotionUsedForKey ? `${nameId}_${emotionUsedForKey}` : `${nameId}`;
-             const rowData = this.configData?.[dataKey] || {};
+        // Determine the data key based on test index (nameId) and UI-selected emotion (currentEmotion)
+        const hasEmotionsConfigured = Array.isArray(this.currentConfigDefinition?.emotion_list) && this.currentConfigDefinition.emotion_list.length > 0;
+         // Use currentEmotion directly, map '' to the placeholder for key lookup
+        const emotionForDataLookup = this.currentEmotion === '' ? 'default_emotion_placeholder' : this.currentEmotion;
+        const dataKey = this.getDataKey(nameId, emotionForDataLookup); // Use getDataKey
 
-             // Add values from required_item in configData (index 1, effective emotion) to the variables map
-            (this.currentConfigDefinition?.required_item || []).forEach(item => {
-                const itemKey = Object.keys(item)[0]; // e.g., 'fileselect', 'modelname'
-                const valueFromData = rowData[itemKey];
-                 const itemDefaultValue = item[itemKey]; // Default value from definition { "key": "Default Value" }
-                 if (valueFromData !== undefined && valueFromData !== null && valueFromData !== '') {
-                     testVariablesMap[itemKey] = valueFromData;
-                 } else if (typeof itemDefaultValue === 'string' || typeof itemDefaultValue === 'number' || typeof itemDefaultValue === 'boolean') {
-                     testVariablesMap[itemKey] = itemDefaultValue;
-                 } else {
-                      testVariablesMap[itemKey] = ''; // Default to empty string
-                 }
-            });
-
-            console.log("Test variables (excluding text) for substitution:", testVariablesMap);
-
-            // --- Handle Before Requests for Test ---
-            // The test function ALWAYS runs the before_requests if defined, ignoring judge_repeat_before.
-            const beforeRequests = this.currentConfigDefinition?.before_requests;
-
-            if (Array.isArray(beforeRequests) && beforeRequests.length > 0) {
-                 this.showMessageBubble('info', `正在进行测试前置请求 (共 ${beforeRequests.length} 个)...`);
-
-                 for (let i = 0; i < beforeRequests.length; i++) {
-                     const beforeReqDef = beforeRequests[i];
-                     if (!beforeReqDef || typeof beforeReqDef !== 'object' || !beforeReqDef.url) {
-                         console.warn(`Skipping invalid before_request definition at index ${i}:`, beforeReqDef);
-                         continue; // Skip invalid entries in the array
-                     }
-
-                     const beforeReqDetails = {
-                         url: beforeReqDef.url,
-                         requestmethod: beforeReqDef.requestmethod || 'GET', // Default to GET if not specified
-                         getparams: beforeReqDef.getparams || [],
-                         body: beforeReqDef.body,
-                     };
-
-                     // Substitute variables in beforeurl details using the test variables map (which doesn't include text yet)
-                     const substitutedBeforeReqDetails = substituteVariables(beforeReqDetails, testVariablesMap);
-                     console.log(`Substituted Before Request ${i + 1} details:`, substitutedBeforeReqDetails);
-
-                     try {
-                         this.showMessageBubble('info', `正在进行测试前置请求 ${i + 1}/${beforeRequests.length}: ${substitutedBeforeReqDetails.url}`);
-                         // Make the beforeurl request
-                         await makeApiRequest(
-                             substitutedBeforeReqDetails.url,
-                             substitutedBeforeReqDetails.requestmethod.toUpperCase(),
-                             substitutedBeforeReqDetails.getparams,
-                             substitutedBeforeReqDetails.body,
-                             useLocalProxy
-                         );
-                         this.showMessageBubble('info', `测试前置请求 ${i + 1} 成功。`);
-                         console.log(`Test Before Request ${i + 1} successful.`);
-
-                     } catch (beforeError) {
-                         console.error(`测试前置请求 ${i + 1} 失败:`, beforeError);
-                         this.testError = `测试前置请求 ${i + 1} 失败: ${beforeError.message}`;
-                         this.showMessageBubble('error', `测试前置请求 ${i + 1} 失败: ${beforeError.message}`);
-                         this.isTesting = false;
-                         this.revokeTestAudioUrls();
-                         return; // Stop test if any before request fails
-                     }
-                 }
-                 this.showMessageBubble('success', '所有测试前置请求成功。');
-
-            } else {
-                 console.log("No before_requests configured or array is empty. Skipping before requests test.");
-            }
-            // --- End Handle Before Requests ---
+        console.log(`[Test] Using data key: ${dataKey} for index ${nameId}, emotion '${this.currentEmotion}'`);
+        const rowData = this.configData?.[dataKey] || {};
+        console.log(`[Test] Loaded row data:`, JSON.parse(JSON.stringify(rowData)));
 
 
-            // --- Handle Main URL for Test (Short Text) ---
-            const textShort = "测试";
-            // Generate a unique filename for test previews
-            const shortFileName = `test_short_${this.selectedConfigName}_${Date.now()}`;
-            // Create a variables map *including* the specific text for the short audio test
-            const shortTextVariablesMap = { ...testVariablesMap, text: textShort };
+        // Add values from required_item in configData (selected index, UI emotion) to the variables map
+        // Also include defaults from the definition if data is missing
+        (this.currentConfigDefinition?.required_item || []).forEach(itemDef => {
+          const itemKey = Object.keys(itemDef)[0];
+          const valueFromData = rowData[itemKey];
+          const definitionDefault = itemDef[itemKey]; // Default value from the definition label (might not be intended as a functional default)
 
-            this.showMessageBubble('info', `正在生成短文本语音...`);
-            // Use processConversationAudioRequest for the main request, passing appropriate data
-             try {
-                 // processConversationAudioRequest requires a mock conversation object and output directory
-                 const conversationMockShort = { id: shortFileName, character: 'TestChar', emotion: testEmotion, text: textShort }; // Mock object for structure/emotion
-                 const testAudioDir = `/data/test/tts_test_preview/${this.selectedConfigName}`; // Distinct temp directory
+          if (valueFromData !== undefined && valueFromData !== null && valueFromData !== '') {
+            testVariablesMap[itemKey] = valueFromData;
+          } else {
+            // Fallback: Use definition label as value? Or better, empty string?
+            // Using empty string is safer than using the label.
+            // If a real default is needed, it should be explicitly defined, perhaps in the configData loading.
+            testVariablesMap[itemKey] = '';
+             console.warn(`[Test] No value found for '${itemKey}' in data key '${dataKey}'. Using empty string.`);
+            // If you *want* to use the label as fallback:
+            // testVariablesMap[itemKey] = (typeof definitionDefault === 'string') ? definitionDefault : '';
+          }
 
-                 // Ensure test preview directory exists
-                 await createFolder(testAudioDir).catch(err => {
-                     if (!err.message.includes('文件夹已存在') && !err.message.includes('Key already exists')) {
-                         console.warn(`创建测试预览目录时出错 (可能已存在): ${err.message}`);
-                     }
-                 });
+          // Special handling for fileselect: if value is a filename, construct path
+          const isFileItem = itemDef.hasOwnProperty('fileselect') && itemDef.fileselect === true;
+          if (isFileItem && typeof testVariablesMap[itemKey] === 'string' && testVariablesMap[itemKey]) {
+              const filename = testVariablesMap[itemKey];
+              // Assume file is in the standard location for this config
+              testVariablesMap[itemKey] = `/data/tts_${this.selectedConfigName}/${filename}`;
+              console.log(`[Test] Mapped fileselect key '${itemKey}' to path: ${testVariablesMap[itemKey]}`);
+          }
 
-                 // Call processConversationAudioRequest
-                 const resultShort = await processConversationAudioRequest(
-                     nameId, // Use index 1 for data lookup
-                     textShort, // Pass the actual text to synthesize
-                     conversationMockShort, // Pass the mock conversation object
-                     lang, // Pass language
-                     //shortFileName, // Filename without extension
-                     this.currentConfigDefinition, // Pass unquoted definition
-                     this.configData, // Pass user data (includes proxy, concurrency - though concurrency is ignored by this function)
-                     testAudioDir, // Pass directory path
-                     (msg) => console.log(`Test (Short): ${msg}`) // Simple status logging for this step
-                     // Note: processConversationAudioRequest builds its own variables map internally.
-                     // We pass the raw data and definition, and it does the substitution.
-                     // This is consistent with how generateVoice will use it.
-                 );
+        });
 
-                 if (resultShort["status"] !== "ok") {
-                     throw new Error(`processConversationAudioRequest for short text returned status "${resultShort}"`);
-                 }
+        // Add GPT prompt values from configData to the map
+         (this.currentConfigDefinition?.gptprompt || []).forEach(promptItem => {
+             const key = Object.keys(promptItem)[0];
+             testVariablesMap[key] = this.configData[key] || promptItem[key] || ''; // Use data, fallback to definition, fallback to empty
+         });
 
-                 // Read the saved file blob and create URL
-                 const shortBlob = await readFile(`${testAudioDir}/${shortFileName}.wav`);
-                 this.blobUrlShort = URL.createObjectURL(shortBlob); // Store for revocation
-                 this.testShortAudioSrc = this.blobUrlShort; // Assign to src
-                 this.showMessageBubble('success', `短文本语音生成成功`);
-                 console.log(`Short audio generated and loaded: ${this.blobUrlShort}`);
 
-             } catch (shortAudioError) {
-                console.error("Generating short audio failed:", shortAudioError);
-                this.testError = `生成短文本语音失败: ${shortAudioError.message}`;
-                this.showMessageBubble('error', `生成短文本语音失败`);
-                this.isTesting = false;
-                this.revokeTestAudioUrls(); // Clean up any URLs created so far
-                return; // Stop if short audio fails
-             }
+        console.log("[Test] Variables for substitution (excluding text):", JSON.parse(JSON.stringify(testVariablesMap)));
 
-            // --- Handle Main URL for Test (Long Text) ---
-            const textLong = "斗之力，三段！望着测验魔石碑上面闪亮得甚至有些刺眼的五个大字，少年面无表情，唇角有着一抹自嘲，紧握的手掌，因为大力，而导致略微尖锐的指甲深深的刺进了掌心之中，带来一阵阵钻心的疼痛…";
-             // Generate a unique filename for test previews
-            const longFileName = `test_long_${this.selectedConfigName}_${Date.now()}`;
-             // Create a variables map *including* the specific text for the long audio test
-            const longTextVariablesMap = { ...testVariablesMap, text: textLong }; // Note: This map isn't directly passed to pCAR, but represents the variables available.
+        // --- Handle Before Requests for Test ---
+        const beforeRequests = this.currentConfigDefinition?.before_requests;
+        if (Array.isArray(beforeRequests) && beforeRequests.length > 0) {
+          this.showMessageBubble('info', `正在进行测试前置请求 (共 ${beforeRequests.length} 个)...`);
+          for (let i = 0; i < beforeRequests.length; i++) {
+            const beforeReqDef = beforeRequests[i];
+            if (!beforeReqDef || typeof beforeReqDef !== 'object' || !beforeReqDef.url) continue;
 
-            this.showMessageBubble('info', `正在生成长文本语音...`);
+            // Deep copy the definition before substitution
+            const beforeReqDetails = JSON.parse(JSON.stringify({
+                url: beforeReqDef.url,
+                requestmethod: beforeReqDef.requestmethod || 'GET',
+                getparams: beforeReqDef.getparams || [], // Ensure array
+                body: beforeReqDef.body,
+                headers: beforeReqDef.headers || {} // Include headers
+            }));
+
             try {
-                 // processConversationAudioRequest requires a mock conversation object and output directory
-                 const conversationMockLong = { id: longFileName, character: 'TestChar', emotion: testEmotion, text: textLong }; // Mock object for structure/emotion
-                 const testAudioDir = `/data/test/tts_test_preview/${this.selectedConfigName}`; // Same distinct temp directory
+              // Substitute variables using the map (which includes testGptReturnValue for {{gptreturn}})
+              const substitutedBeforeReqDetails = substituteVariables(beforeReqDetails, testVariablesMap, readFile); // Pass readFile for file content
+              console.log(`[Test] Substituted Before Request ${i + 1} details:`, JSON.parse(JSON.stringify(substitutedBeforeReqDetails)));
 
-                 // Directory should already exist from the short audio step, but ensure anyway
-                 await createFolder(testAudioDir).catch(err => {
-                      if (!err.message.includes('文件夹已存在') && !err.message.includes('Key already exists')) {
-                         console.warn(`创建测试预览目录时出错 (可能已存在): ${err.message}`);
-                     }
-                 });
+              this.showMessageBubble('info', `正在进行测试前置请求 ${i + 1}/${beforeRequests.length}: ${substitutedBeforeReqDetails.url}`);
+              await makeApiRequest(
+                  substitutedBeforeReqDetails.url,
+                  substitutedBeforeReqDetails.requestmethod.toUpperCase(),
+                  substitutedBeforeReqDetails.getparams, // Already substituted
+                  substitutedBeforeReqDetails.body, // Already substituted (or file content loaded)
+                  useLocalProxy,
+                  substitutedBeforeReqDetails.headers // Pass substituted headers
+                );
+              this.showMessageBubble('info', `测试前置请求 ${i + 1} 成功。`);
+              console.log(`[Test] Before Request ${i + 1} successful.`);
+            } catch (beforeError) {
+              console.error(`[Test] Before Request ${i + 1} 失败:`, beforeError);
+              this.testError = `测试前置请求 ${i + 1} 失败: ${beforeError.message}`;
+              this.showMessageBubble('error', `测试前置请求 ${i + 1} 失败: ${beforeError.message}`);
+              this.isTesting = false;
+              return; // Stop test if before request fails
+            }
+          }
+          this.showMessageBubble('success', '所有测试前置请求成功。');
+        } else {
+          console.log("[Test] No before_requests configured. Skipping.");
+        }
+        // --- End Handle Before Requests ---
 
-                 // Call processConversationAudioRequest
-                 const resultLong = await processConversationAudioRequest(
-                     nameId, // Use index 1 for data lookup
-                     textLong, // Pass the actual text to synthesize
-                     conversationMockLong, // Pass the mock conversation object
-                     lang, // Pass language
-                     //longFileName, // Filename without extension
-                     this.currentConfigDefinition, // Pass unquoted definition
-                     this.configData, // Pass user data
-                     testAudioDir, // Pass directory path
-                      (msg) => console.log(`Test (Long): ${msg}`) // Simple status logging
+
+        // --- Handle Main Request for Test (Short Text) ---
+        const textShort = "测试";
+        const shortFileName = `test_short_${this.selectedConfigName}_${nameId}_${Date.now()}`;
+        this.showMessageBubble('info', `正在生成短文本语音: "${textShort}"`);
+        try {
+          // Mock conversation object uses the gptReturnValueForTest as its emotion
+          const conversationMockShort = { id: shortFileName, character: 'TestChar', emotion: gptReturnValueForTest, text: textShort };
+          const testAudioDir = `/data/test/tts_test_preview/${this.selectedConfigName}`;
+          await createFolder(testAudioDir).catch(err => { if (!err.message.includes('文件夹已存在') && !err.message.includes('Key already exists')) console.warn(`创建测试预览目录时出错: ${err.message}`); });
+
+          // Pass nameId (selected test index)
+          // Pass the *current* configData (not just rowData) as it contains global settings like concurrency, proxy toggle, gpt prompts
+          const resultShort = await processConversationAudioRequest(
+                nameId, // Index of the data row to use
+                textShort,
+                conversationMockShort,
+                lang,
+                this.currentConfigDefinition,
+                this.configData, // Pass the full configData object
+                testAudioDir,
+                (msg) => console.log(`[Test Short] ${msg}`), // Progress callback
+                true // Indicate this is a test call
+                );
+
+          if (resultShort.status !== "ok") {
+            throw new Error(resultShort.reason || `处理短文本请求失败，状态: "${resultShort.status}"`);
+          }
+
+          const shortBlob = await readFile(`${testAudioDir}/${shortFileName}.wav`);
+          this.blobUrlShort = URL.createObjectURL(shortBlob);
+          this.testShortAudioSrc = this.blobUrlShort;
+          this.showMessageBubble('success', `短文本语音生成成功`);
+          console.log(`[Test] Short audio generated: ${this.blobUrlShort}`);
+
+        } catch (shortAudioError) {
+          console.error("[Test] Generating short audio failed:", shortAudioError);
+          this.testError = `生成短文本语音失败: ${shortAudioError.message}`;
+          this.showMessageBubble('error', `生成短文本语音失败: ${shortAudioError.message}`);
+          // Don't return, allow long text test to proceed if desired, but mark error
+        }
+
+        // --- Handle Main Request for Test (Long Text) ---
+        // Only proceed if short text didn't set a fatal error (optional - could skip)
+        // if (!this.testError || !this.testError.startsWith("生成短文本语音失败")) { // Example condition
+        const textLong = "斗之力，三段！望着测验魔石碑上面闪亮得甚至有些刺眼的五个大字，少年面无表情，唇角有着一抹自嘲。";
+        const longFileName = `test_long_${this.selectedConfigName}_${nameId}_${Date.now()}`;
+        this.showMessageBubble('info', `正在生成长文本语音...`);
+        try {
+             // Mock conversation object uses the gptReturnValueForTest as its emotion
+            const conversationMockLong = { id: longFileName, character: 'TestChar', emotion: gptReturnValueForTest, text: textLong };
+            const testAudioDir = `/data/test/tts_test_preview/${this.selectedConfigName}`; // Should exist now
+            // No need to create folder again if short test succeeded or ran
+
+            // Pass nameId (selected test index)
+             const resultLong = await processConversationAudioRequest(
+                 nameId,
+                 textLong,
+                 conversationMockLong,
+                 lang,
+                 this.currentConfigDefinition,
+                 this.configData, // Pass full configData
+                 testAudioDir,
+                 (msg) => console.log(`[Test Long] ${msg}`),
+                 true // Indicate test call
                  );
 
-                 if (resultLong["status"] !== "ok") {
-                     throw new Error(`processConversationAudioRequest for long text returned status "${resultLong}"`);
-                 }
 
-                // Read the saved file blob and create URL
-                const longBlob = await readFile(`${testAudioDir}/${longFileName}.wav`);
-                this.blobUrlLong = URL.createObjectURL(longBlob); // Store for revocation
-                this.testLongAudioSrc = this.blobUrlLong; // Assign to src
-                 this.showMessageBubble('success', `长文本语音生成成功`);
-                 console.log(`Long audio generated and loaded: ${this.blobUrlLong}`);
-
-            } catch (longAudioError) {
-                console.error("Generating long audio failed:", longAudioError);
-                // Set testError if it wasn't already set by a previous step
-                this.testError = this.testError || `生成长文本语音失败: ${longAudioError.message}`;
-                 this.showMessageBubble('error', `生成长文本语音失败`);
-                 // Don't return, still want to potentially show short audio if it succeeded
+            if (resultLong.status !== "ok") {
+                throw new Error(resultLong.reason || `处理长文本请求失败，状态: "${resultLong.status}"`);
             }
 
-            // 5. Final Status Update
-            if (!this.testError) {
-                 this.showMessageBubble('success', '测试完成，音频已加载。');
-            } else {
-                 // testError already contains a message from one of the steps
-                 this.showMessageBubble('error', '测试完成，但有步骤失败。');
-            }
+            const longBlob = await readFile(`${testAudioDir}/${longFileName}.wav`);
+            this.blobUrlLong = URL.createObjectURL(longBlob);
+            this.testLongAudioSrc = this.blobUrlLong;
+            this.showMessageBubble('success', `长文本语音生成成功`);
+            console.log(`[Test] Long audio generated: ${this.blobUrlLong}`);
 
-
-        } catch (error) {
-            // Catch any unexpected errors during setup or processing not caught in specific steps
-            console.error("An unexpected error occurred during test:", error);
-            // Set testError if it wasn't already set
-            this.testError = this.testError || `发生意外错误: ${error.message}`;
-            this.showMessageBubble('error', `测试中止: ${error.message}`);
-
-        } finally {
-            this.isTesting = false;
-            // Clean up test preview files if needed? Or let IndexedDB manage?
-            // For now, leave them. Could add cleanup logic here if they accumulate.
+        } catch (longAudioError) {
+            console.error("[Test] Generating long audio failed:", longAudioError);
+            // Append error if short text also failed, or set if it's the first error
+            const longErrorMsg = `生成长文本语音失败: ${longAudioError.message}`;
+            this.testError = this.testError ? `${this.testError}; ${longErrorMsg}` : longErrorMsg;
+            this.showMessageBubble('error', longErrorMsg);
         }
+        // } else {
+        //   console.log("[Test] Skipping long text test due to short text failure.");
+        // }
+
+
+        // --- Final Status Update ---
+        if (!this.testError) {
+          this.showMessageBubble('success', '测试完成，音频已加载。');
+        } else {
+          // Error message already shown for specific step failures
+           this.showMessageBubble('warning', '测试完成，但有步骤失败，请检查日志和错误信息。');
+        }
+
+
+      } catch (error) {
+        console.error("[Test] An unexpected error occurred during test:", error);
+         const unexpectedErrorMsg = `发生意外错误: ${error.message}`;
+        this.testError = this.testError ? `${this.testError}; ${unexpectedErrorMsg}` : unexpectedErrorMsg;
+        this.showMessageBubble('error', `测试中止: ${error.message}`);
+
+      } finally {
+        this.isTesting = false;
+      }
     },
     // ---------------------------------------
 
     // --- Message Bubble ---
     showMessageBubble(type, content) {
-        this.messageContent = content;
-        this.messageType = type;
-        this.showMessage = true;
+      this.messageContent = content;
+      this.messageType = type;
+      this.showMessage = true;
 
-        clearTimeout(this.messageTimeout);
-        this.messageTimeout = setTimeout(() => {
-            this.showMessage = false;
-        }, 3500); // Show for 3.5 seconds
+      clearTimeout(this.messageTimeout);
+      this.messageTimeout = setTimeout(() => {
+        this.showMessage = false;
+      }, 3500);
     }
   }
 };
 </script>
 
-
-
 <style scoped>
-/* Reuse existing styles and add new ones */
-:root {
-  /* Re-declare variables if not globally available, or import from a global CSS file */
+/* Main Container Styling */
+.voice-config {
+  color: var(--text-color);
+  background-color: var(--bg-color);
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  padding: 24px;
+  position: relative;
+  transition: background-color 0.3s ease, color 0.3s ease; /* Added color transition */
+}
+
+/* Variable declarations (Light Mode) */
+.voice-config {
+  --bg-color: #ffffff;
+  --text-color: #333333;
+  --text-secondary: #667085; /* Added for hints */
+  --border-color: #e0e0e0;
+  --separator-color: #eaeaea;
   --primary-color: #4f46e5;
-  --primary-hover: #4338ca;
-  --primary-light: #e0e7ff;
+  --primary-color-hover: #4338ca;
+  --secondary-color: #6366f1;
+  --danger-color: #ef4444;
   --success-color: #10b981;
-  --success-hover: #059669;
-  --error-color: #ef4444;
-  --error-hover: #dc2626; /* Darker red */
   --warning-color: #f59e0b;
   --info-color: #3b82f6;
-  --background-color: #f9fafb; /* Light gray background */
-  --card-bg: #ffffff;
-  --text-color: #1f2937; /* Darker text */
-  --text-secondary: #6b7280; /* Medium gray text */
-  --border-color: #e5e7eb; /* Lighter border */
-  --separator-color: #f3f4f6; /* Very light separator */
-  --input-bg: #ffffff;
-  --input-border: #d1d5db; /* Gray border */
-  --input-text: #111827; /* Very dark input text */
-  --input-focus: #6366f1; /* Indigo focus ring */
-  --header-bg: #f3f4f6; /* Slightly darker header */
-  --even-row-bg: #f9fafb; /* Match background */
-  --odd-row-bg: #ffffff; /* White rows */
-  --shadow-light: rgba(0, 0, 0, 0.04);
-  --shadow-medium: rgba(0, 0, 0, 0.08);
-  --transition-speed: 0.25s;
-  --border-radius: 6px; /* Slightly smaller radius */
-  --active-bg: #e0e7ff; /* Light indigo for active */
-
-  /* Emotion colors */
-   --emotion-default-color: #64748b; /* Slate */
-   --emotion-default-bg: #f1f5f9;
-   --emotion-happy-color: #f59e0b; /* Amber */
-   --emotion-happy-bg: #fef3c7;
-   --emotion-sad-color: #3b82f6; /* Blue */
-   --emotion-sad-bg: #dbeafe;
-   --emotion-angry-color: #ef4444; /* Red */
-   --emotion-angry-bg: #fee2e2;
+  --disabled-color: #9ca3af;
+  --input-bg: #f9fafb;
+  --input-border: #d1d5db;
+  --input-focus-border: #4f46e5; /* Renamed for clarity */
+  --input-focus-shadow: rgba(79, 70, 229, 0.2); /* Renamed for clarity */
+  --btn-text: #ffffff;
+  --panel-bg: #f8fafc;
+  --even-row-bg: #f3f4f6;
+  --hover-bg: #f0f4ff;
+  --test-panel-bg: #f0f9ff;
+  --test-panel-border: rgba(59, 130, 246, 0.3); /* Added */
+  --emotion-button-bg: #e5e7eb;
+  --emotion-active-bg: #4f46e5;
+  --emotion-active-text: #ffffff;
+  --modal-overlay-bg: rgba(0, 0, 0, 0.5); /* Added */
+  --error-bg: #fef2f2; /* Added */
+  --error-border: #f87171; /* Added */
+  --error-text: #b91c1c; /* Added */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
 }
 
-/* Dark theme variables */
-body.dark-theme {
-  --primary-color: #6366f1;
-  --primary-hover: #818cf8;
-  --primary-light: #312e81; /* Darker indigo */
-  --success-color: #34d399; /* Lighter green */
-  --success-hover: #6ee7b7;
-  --error-color: #f87171; /* Lighter red */
-  --error-hover: #fb9292;
-  --warning-color: #fbbf24; /* Lighter amber */
+/* Dark mode styling */
+:global(body.dark-theme) .voice-config {
+  --bg-color: #1e293b; /* Dark blue-gray */
+  --text-color: #f3f4f6; /* Light gray */
+  --text-secondary: #94a3b8; /* Lighter gray for hints */
+  --border-color: #374151; /* Medium gray */
+  --separator-color: #2d3748; /* Darker gray */
+  --primary-color: #6366f1; /* Slightly lighter purple */
+  --primary-color-hover: #818cf8; /* Lighter hover */
+  /* --secondary-color: #818cf8; */ /* Adjust if needed */
+  /* --danger-color: #f87171; */ /* Adjust if needed */
+  /* --success-color: #34d399; */ /* Adjust if needed */
+  /* --warning-color: #fbbf24; */ /* Adjust if needed */
   --info-color: #60a5fa; /* Lighter blue */
-  --background-color: #111827; /* Very dark blue-gray */
-  --card-bg: #1f2937; /* Dark blue-gray */
-  --text-color: #e5e7eb; /* Light gray text */
-  --text-secondary: #9ca3af; /* Medium gray text */
-  --border-color: #374151; /* Darker border */
-  --separator-color: #1f2937; /* Match card bg */
-  --input-bg: #374151; /* Medium dark input */
-  --input-border: #4b5563; /* Darker input border */
-  --input-text: #f3f4f6; /* Very light input text */
-  --input-focus: #818cf8; /* Lighter indigo focus */
-  --header-bg: #1f2937; /* Match card bg */
-  --even-row-bg: #1f2937; /* Match card bg */
-  --odd-row-bg: #1a2331; /* Slightly darker than card bg */
-  --active-bg: #3730a3; /* Darker indigo active */
-
-  /* Dark theme emotion colors */
-   --emotion-default-bg: #334155; /* Dark Slate */
-   --emotion-default-color: #94a3b8;
-   --emotion-happy-bg: #78350f; /* Dark Amber */
-   --emotion-happy-color: #fcd34d;
-   --emotion-sad-bg: #1e3a8a; /* Dark Blue */
-   --emotion-sad-color: #93c5fd;
-   --emotion-angry-bg: #7f1d1d; /* Dark Red */
-   --emotion-angry-color: #fca5a5;
+  --input-bg: #111827; /* Very dark blue-gray */
+  --input-border: #4b5563; /* Darker medium gray */
+  --input-focus-border: #6366f1; /* Match primary */
+  --input-focus-shadow: rgba(99, 102, 241, 0.3); /* Adjust alpha if needed */
+  --panel-bg: #0f172a; /* Very dark blue */
+  --even-row-bg: #283548; /* Slightly lighter dark blue-gray */
+  --hover-bg: #2c3344; /* Darker hover state */
+  --test-panel-bg: #172042; /* Darker blue */
+  --test-panel-border: rgba(96, 165, 250, 0.4); /* Lighter blue border */
+  --emotion-button-bg: #374151; /* Medium gray */
+  --emotion-active-bg: #6366f1; /* Match primary */
+  --emotion-active-text: #ffffff;
+  --modal-overlay-bg: rgba(0, 0, 0, 0.7); /* Darker overlay */
+  --error-bg: rgba(239, 68, 68, 0.15); /* Transparent red */
+  --error-border: #ef4444; /* Keep danger color */
+  --error-text: #fca5a5; /* Light red text */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
 }
 
-
-.voice-config {
-  padding: 1.5rem 2rem; /* More horizontal padding */
-  max-width: 1500px; /* Slightly wider */
-  margin: 1.5rem auto;
-  font-family: 'Inter', 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
-  color: var(--text-color);
-  position: relative;
-  background-color: var(--background-color);
-  transition: background-color var(--transition-speed);
-  border-radius: var(--border-radius);
-}
-
-/* Config Management Bar */
+/* Top Configuration Selection & Management */
 .config-management-bar {
   display: flex;
   align-items: center;
-  gap: 1rem; /* Increased gap */
-  margin-bottom: 1.5rem;
+  gap: 12px;
   flex-wrap: wrap;
-  background-color: var(--card-bg);
-  padding: 1rem 1.5rem;
-  border-radius: var(--border-radius);
-  box-shadow: 0 2px 4px var(--shadow-light);
-  border: 1px solid var(--border-color);
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .config-management-bar label {
-  font-weight: 500; /* Slightly less bold */
+  font-weight: 600;
+  margin-right: 4px;
   white-space: nowrap;
-  color: var(--text-secondary); /* Subtle color */
+  color: var(--text-color); /* Use variable */
 }
 
-.config-management-bar select {
-  padding: 0.5rem 2.5rem 0.5rem 0.8rem; /* Space for arrow */
-  border: 1px solid var(--input-border);
-  border-radius: var(--border-radius);
-  background-color: var(--input-bg);
-  color: var(--input-text);
+#config-select {
+  flex: 1;
   min-width: 200px;
-  flex-grow: 1;
-  max-width: 350px;
-  font-size: 0.9rem;
-  box-shadow: none; /* Remove inner shadow */
-  transition: border-color var(--transition-speed), box-shadow var(--transition-speed);
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%236b7280'%3E%3Cpath fill-rule='evenodd' d='M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z' clip-rule='evenodd' /%3E%3C/svg%3E");
-  background-position: right 0.6rem center;
-  background-repeat: no-repeat;
-  background-size: 1.25em 1.25em;
-}
-
-.config-management-bar select:focus {
+  padding: 8px 12px;
+  font-size: 1rem;
+  border: 1px solid var(--input-border);
+  border-radius: 6px;
+  background-color: var(--input-bg);
+  color: var(--text-color);
   outline: none;
-  border-color: var(--input-focus);
-  box-shadow: 0 0 0 2px var(--primary-light); /* Focus ring */
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-/* Common button styles */
+#config-select:focus {
+  border-color: var(--input-focus-border);
+  box-shadow: 0 0 0 2px var(--input-focus-shadow);
+}
+
+/* Button styling */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0.5rem 1rem;
-  font-weight: 500;
-  border-radius: var(--border-radius);
+  gap: 6px;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
   cursor: pointer;
-  transition: all var(--transition-speed);
-  border: 1px solid transparent; /* Base border */
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  box-shadow: var(--shadow-sm);
+  color: var(--btn-text); /* Default button text color */
+}
+
+.btn:focus {
   outline: none;
-  font-size: 0.875rem;
-  line-height: 1.25rem;
-  box-shadow: 0 1px 2px 0 var(--shadow-medium); /* Subtle shadow */
+   box-shadow: 0 0 0 3px var(--input-focus-shadow); /* Consistent focus */
 }
-.btn:hover {
-  transform: translateY(-1px); /* Slight lift */
-  box-shadow: 0 2px 4px 0 var(--shadow-medium);
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background-color: var(--disabled-color); /* Indicate disabled state more clearly */
+   box-shadow: none;
+   transform: none;
 }
-.btn:active { transform: translateY(0); box-shadow: 0 1px 2px 0 var(--shadow-medium); }
-.btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
 
-/* Specific Button Styles */
-.btn-primary { background-color: var(--primary-color); color: white; }
-.btn-primary:hover:not(:disabled) { background-color: var(--primary-hover); }
-.btn-secondary { background-color: var(--text-secondary); color: white; border-color: var(--text-secondary); }
-.btn-secondary:hover:not(:disabled) { background-color: #4b5563; border-color: #4b5563; }
-.btn-success { background-color: var(--success-color); color: white; }
-.btn-success:hover:not(:disabled) { background-color: var(--success-hover); }
-.btn-add { background-color: var(--success-color); color: white; }
-.btn-add:hover:not(:disabled) { background-color: var(--success-hover); }
-.btn-modify { background-color: var(--primary-color); color: white; }
-.btn-modify:hover:not(:disabled) { background-color: var(--primary-hover); }
-.btn-delete { background-color: var(--error-color); color: white; }
-.btn-delete:hover:not(:disabled) { background-color: var(--error-hover); }
-
-/* Small button styles */
 .btn-sm {
-  padding: 0.4rem 0.8rem;
-  font-size: 0.8rem;
+  padding: 6px 12px;
+  font-size: 0.9rem;
 }
-.btn-icon { margin-right: 0.4rem; font-size: 0.9em; vertical-align: middle; }
-.btn-icon-xs { margin-right: 0.3rem; font-size: 0.8em; }
 
-/* Separators */
-.separator { height: 1px; background-color: var(--border-color); margin: 1.5rem 0; width: 100%; }
-.separator.thick-separator { height: 2px; background: var(--border-color); margin: 1.5rem 0 2rem 0; border-radius: 1px; }
+.btn-xs {
+  padding: 4px 8px;
+  font-size: 0.8rem;
+  gap: 4px; /* Smaller gap for xs buttons */
+}
+.btn-xs .svg-inline--fa { /* Target FA icons specifically if needed */
+   font-size: 0.8em; /* Make icon slightly smaller in xs */
+}
+
+
+.btn-add { background-color: var(--primary-color); }
+.btn-add:hover:not(:disabled) { background-color: var(--primary-color-hover); transform: translateY(-1px); }
+
+.btn-modify { background-color: var(--info-color); }
+.btn-modify:hover:not(:disabled) { background-color: var(--primary-color-hover); transform: translateY(-1px); } /* Using primary hover for consistency */
+
+.btn-delete { background-color: var(--danger-color); }
+.btn-delete:hover:not(:disabled) { background-color: #dc2626; transform: translateY(-1px); }
+
+.btn-file { background-color: var(--info-color); }
+.btn-file:hover:not(:disabled) { background-color: #2563eb; }
+
+.btn-fill { background-color: var(--warning-color); }
+.btn-fill:hover:not(:disabled) { background-color: #ea580c; }
+
+.btn-success { background-color: var(--success-color); }
+.btn-success:hover:not(:disabled) { background-color: #059669; transform: translateY(-1px); }
+
+.btn-info { background-color: var(--info-color); }
+.btn-info:hover:not(:disabled) { background-color: #2563eb; }
+
+.btn-secondary { background-color: #6b7280; } /* Slightly darker secondary */
+.btn-secondary:hover:not(:disabled) { background-color: #4b5563; }
+
+.btn-primary { background-color: var(--primary-color); }
+.btn-primary:hover:not(:disabled) { background-color: var(--primary-color-hover); }
+
+/* Class for icons inside buttons */
+.btn-icon {
+  /* display: inline-block; */ /* Not needed with flex */
+  /* margin-right: 4px; */ /* Gap handles spacing */
+  /* vertical-align: middle; */ /* Flex handles alignment */
+}
+
+
+/* Separator */
+.separator {
+  margin: 16px 0;
+  height: 1px;
+  background-color: var(--separator-color);
+  width: 100%;
+}
+
+.thick-separator {
+  height: 2px;
+  margin: 20px 0;
+}
+
+/* No config selected placeholder */
+.no-config-selected {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 200px; /* Use min-height */
+  border: 2px dashed var(--border-color);
+  border-radius: 8px;
+  margin: 24px 0;
+  padding: 20px; /* Add padding */
+  color: var(--text-secondary); /* Use secondary text color */
+  opacity: 0.8; /* Slightly less opaque */
+  text-align: center;
+}
 
 /* Header Section */
-.header-section { margin-bottom: 1.5rem; }
-.title { font-size: 1.5rem; font-weight: 600; color: var(--text-color); margin-bottom: 1.5rem; letter-spacing: -0.01em; }
-
-/* Proxy Config & Concurrency Config */
-.proxy-config,
-.concurrency-config {
-    display: flex;
-    align-items: center;
-    margin: 1rem 0; /* Adjusted margin */
-    padding: 0.75rem;
-    background-color: var(--card-bg);
-    border: 1px solid var(--border-color);
-    border-radius: var(--border-radius);
-}
-/* Add margin between proxy and concurrency if both are visible */
-.proxy-config + .concurrency-config,
-.concurrency-config + .proxy-config {
-    margin-top: 0.5rem; /* Reduce space if both are present */
+.header-section {
+  margin-bottom: 24px;
 }
 
+.title {
+  font-size: 1.8rem;
+  margin-bottom: 20px; /* Increased margin */
+  color: var(--primary-color);
+  font-weight: 700;
+}
 
-.proxy-label,
-.concurrency-label {
+/* Form Group Styling */
+.form-group {
+  margin-bottom: 16px;
+  /* Removed background/border/shadow from individual proxy/concurrency groups */
+}
+.form-group:last-child {
+    margin-bottom: 0; /* Remove margin from last group in a container */
+}
+
+
+.form-group label {
+  display: block;
+  margin-bottom: 6px;
   font-weight: 500;
-  margin-right: 0.75rem;
+  color: var(--text-color); /* Use variable */
+}
+
+.form-input, .form-textarea, .form-select {
+  width: 100%;
+  padding: 10px 12px; /* Adjusted padding */
+  border: 1px solid var(--input-border);
+  background-color: var(--input-bg);
   color: var(--text-color);
-  white-space: nowrap; /* Prevent wrapping */
+  border-radius: 6px;
+  font-size: 1rem;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.form-input::placeholder, .form-textarea::placeholder {
+    color: var(--text-secondary); /* Style placeholder text */
+    opacity: 0.7;
 }
 
+
+.form-input:focus, .form-textarea:focus, .form-select:focus {
+  outline: none;
+  border-color: var(--input-focus-border);
+  box-shadow: 0 0 0 3px var(--input-focus-shadow); /* Slightly larger focus shadow */
+}
+
+.form-textarea {
+  resize: vertical;
+  min-height: 60px; /* Reduced default height */
+}
+
+/* --- NEW: Proxy & Concurrency Row --- */
+.proxy-concurrency-row {
+    display: flex;
+    flex-wrap: wrap; /* Allow wrapping on smaller screens */
+    align-items: center;
+    gap: 24px; /* Increased gap */
+    margin-bottom: 20px;
+    padding: 16px;
+    background-color: var(--panel-bg); /* Add panel background to the row */
+    border-radius: 8px;
+    box-shadow: var(--shadow-sm);
+}
+.proxy-concurrency-row .form-group {
+    margin-bottom: 0; /* Remove bottom margin from inner groups */
+    display: flex; /* Align label and control */
+    align-items: center;
+    gap: 10px;
+}
+.proxy-concurrency-row .form-group label {
+    margin-bottom: 0; /* Remove bottom margin from labels inside */
+    white-space: nowrap;
+}
+
+/* Specific adjustments for proxy/concurrency items inside the row */
+.proxy-config {
+  /* Removed background/padding/shadow */
+}
+.concurrency-config {
+   /* Removed background/padding/shadow */
+}
 .concurrency-input {
-    padding: 0.5rem 0.75rem;
-    border: 1px solid var(--input-border);
-    border-radius: var(--border-radius);
-    background-color: var(--input-bg);
-    color: var(--input-text);
-    width: 80px; /* Fixed width for number input */
-    text-align: center;
-     transition: border-color var(--transition-speed), box-shadow var(--transition-speed);
+  width: 70px; /* Slightly narrower */
+  padding: 8px; /* Adjust padding */
+  text-align: center;
 }
-.concurrency-input:focus {
-    outline: none;
-    border-color: var(--input-focus);
-    box-shadow: 0 0 0 2px var(--primary-light);
-}
-
 
 /* Toggle Switch */
-.toggle-switch { position: relative; display: inline-block; width: 40px; height: 20px; }
-.toggle-switch input { opacity: 0; width: 0; height: 0; }
-.toggle-label-switch { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .3s; border-radius: 20px; }
-.toggle-label-switch:before { position: absolute; content: ""; height: 14px; width: 14px; left: 3px; bottom: 3px; background-color: white; transition: .3s; border-radius: 50%; }
-input:checked + .toggle-label-switch { background-color: var(--primary-color); }
-input:focus + .toggle-label-switch { box-shadow: 0 0 0 2px var(--primary-light); }
-input:checked + .toggle-label-switch:before { transform: translateX(20px); }
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 44px; /* Smaller toggle */
+  height: 22px;
+  flex-shrink: 0; /* Prevent shrinking */
+}
 
-/* GPT Prompts Section */
-.gpt-prompts { margin: 1.5rem 0; display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
-.prompt-item { background-color: var(--card-bg); padding: 1rem 1.25rem; border-radius: var(--border-radius); border: 1px solid var(--border-color); transition: all var(--transition-speed); }
-.prompt-item:hover { box-shadow: 0 3px 6px var(--shadow-light); border-color: var(--primary-light); }
-.prompt-item label { display: block; font-weight: 500; margin-bottom: 0.6rem; color: var(--text-color); font-size: 0.9rem; }
-.prompt-item textarea { width: 100%; min-height: 70px; padding: 0.6rem 0.8rem; border: 1px solid var(--input-border); border-radius: var(--border-radius); background-color: var(--input-bg); color: var(--input-text); font-size: 0.875rem; transition: all var(--transition-speed); resize: vertical; }
-.prompt-item textarea:focus { outline: none; border-color: var(--input-focus); box-shadow: 0 0 0 2px var(--primary-light); }
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
 
-/* Emotion Switcher */
-.emotion-switcher { margin: 1.75rem 0; background-color: var(--card-bg); border: 1px solid var(--border-color); padding: 1rem 1.5rem; border-radius: var(--border-radius); }
-.emotion-title { font-weight: 500; margin-bottom: 0.8rem; color: var(--text-color); font-size: 0.95rem; }
-.emotion-options { display: flex; flex-wrap: wrap; gap: 0.6rem; }
-.emotion-btn { padding: 0.4rem 0.9rem; border-radius: var(--border-radius); background-color: var(--input-bg); color: var(--text-secondary); border: 1px solid var(--border-color); cursor: pointer; transition: all var(--transition-speed); font-weight: 400; font-size: 0.85rem; box-shadow: none; }
-.emotion-btn:hover { background-color: var(--separator-color); border-color: var(--input-border); color: var(--text-color); }
-.emotion-btn.active { color: var(--primary-color); border-color: var(--primary-color); background-color: var(--primary-light); font-weight: 500; }
-.emotion-btn[data-emotion="happy"].active { color: var(--emotion-happy-color); border-color: var(--emotion-happy-color); background-color: var(--emotion-happy-bg); }
-.emotion-btn[data-emotion="sad"].active { color: var(--emotion-sad-color); border-color: var(--emotion-sad-color); background-color: var(--emotion-sad-bg); }
-.emotion-btn[data-emotion="angry"].active { color: var(--emotion-angry-color); border-color: var(--emotion-angry-color); background-color: var(--emotion-angry-bg); }
-.emotion-label { display: inline-block; position: relative; }
+.toggle-label-switch {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  transition: .4s;
+  border-radius: 22px; /* Match height */
+}
+
+.toggle-label-switch:before {
+  position: absolute;
+  content: "";
+  height: 16px; /* Smaller circle */
+  width: 16px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: .4s;
+  border-radius: 50%;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.2); /* Add subtle shadow */
+}
+
+input:checked + .toggle-label-switch {
+  background-color: var(--primary-color);
+}
+
+input:focus + .toggle-label-switch {
+  box-shadow: 0 0 0 3px var(--input-focus-shadow); /* Consistent focus */
+}
+
+input:checked + .toggle-label-switch:before {
+  transform: translateX(22px); /* Adjust translation distance */
+}
+
+/* GPT Prompts */
+.gpt-prompts {
+  margin-top: 20px; /* Consistent margin */
+  padding: 16px;
+  background-color: var(--panel-bg);
+  border-radius: 8px;
+  box-shadow: var(--shadow-sm);
+}
+
+.prompt-item {
+  margin-bottom: 16px;
+}
+
+.prompt-item:last-child {
+  margin-bottom: 0;
+}
+
+/* Emotion Selector */
+.emotion-switcher {
+  margin: 20px 0; /* Consistent margin */
+  padding: 16px;
+  background-color: var(--panel-bg);
+  border-radius: 8px;
+  box-shadow: var(--shadow-sm);
+}
+
+.emotion-title {
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: var(--text-color); /* Use variable */
+}
+
+.emotion-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.emotion-btn {
+  background-color: var(--emotion-button-bg);
+  border: 1px solid transparent; /* Add border for definition */
+  padding: 6px 14px; /* Slightly adjust padding */
+  border-radius: 20px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: var(--text-secondary); /* Use secondary text */
+}
+
+.emotion-btn:hover {
+  background-color: var(--hover-bg); /* Use hover variable */
+  color: var(--text-primary);
+  transform: translateY(-1px);
+  border-color: var(--border-color); /* Show border on hover */
+}
+
+.emotion-btn.active {
+  background-color: var(--emotion-active-bg);
+  color: var(--emotion-active-text);
+  box-shadow: var(--shadow-sm);
+  border-color: transparent; /* Hide border when active */
+   font-weight: 600; /* Make active bolder */
+}
+
+/* Content Section (Table Area) */
+.content-section {
+  background-color: var(--panel-bg);
+  border-radius: 12px;
+  padding: 0; /* Remove padding, apply to inner elements */
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 24px;
+  overflow: hidden; /* Clip child corners */
+}
 
 /* Current Emotion Indicator */
-.current-emotion-indicator { display: inline-flex; align-items: center; padding: 0.5rem 1rem; border-radius: var(--border-radius); margin-bottom: 1.25rem; font-weight: 500; font-size: 0.875rem; }
-.current-emotion-indicator.emotion-default { background-color: var(--emotion-default-bg); color: var(--emotion-default-color); }
-.current-emotion-indicator.emotion-happy { background-color: var(--emotion-happy-bg); color: var(--emotion-happy-color); }
-.current-emotion-indicator.emotion-sad { background-color: var(--emotion-sad-bg); color: var(--emotion-sad-color); }
-.current-emotion-indicator.emotion-angry { background-color: var(--emotion-angry-bg); color: var(--emotion-angry-color); }
-.emotion-indicator-text { font-weight: 500; }
-
-/* Content Section - Table Styling */
-.content-section { background-color: var(--card-bg); border-radius: var(--border-radius); border: 1px solid var(--border-color); margin-bottom: 2rem; overflow: hidden; /* Keep overflow hidden for border-radius clipping */ }
-.table-header { display: flex; background-color: var(--header-bg); padding: 0.75rem 1rem; font-weight: 500; color: var(--text-secondary); border-bottom: 1px solid var(--border-color); align-items: center; font-size: 0.85rem; }
-.col-index { width: 50px; flex-shrink: 0; text-align: center; font-weight: 500; color: var(--text-color); }
-.col-dynamic { padding: 0.5rem 0.75rem; flex: 1; min-width: 0; display: flex; align-items: center; justify-content: space-between; /* Align label and button */ }
-.table-header .col-dynamic span { font-weight: 500; color: var(--text-secondary); }
-
-/* REMOVED .entries-container-no-scroll styling for max-height and overflow */
-
-.entry-row { display: flex; padding: 0.75rem 1rem; border-bottom: 1px solid var(--border-color); transition: background-color var(--transition-speed); align-items: center; }
-.entry-row:hover { background-color: var(--separator-color); }
-.entry-row:last-child { border-bottom: none; }
-.even-row { background-color: var(--even-row-bg); }
-.entry-row .col-dynamic { align-items: stretch; /* Let inputs fill height */ padding: 0.5rem 0.75rem; } /* Adjust padding for rows */
-
-.entry-row textarea { width: 100%; padding: 0.6rem 0.8rem; border: 1px solid var(--input-border); border-radius: var(--border-radius); background-color: var(--input-bg); color: var(--input-text); font-size: 0.875rem; transition: all var(--transition-speed); resize: vertical; min-height: 40px; line-height: 1.4; }
-.entry-row textarea:focus { outline: none; border-color: var(--input-focus); box-shadow: 0 0 0 2px var(--primary-light); }
-
-/* File Select Input Styling */
-.fileselect-wrapper { display: flex; width: 100%; align-items: center; }
-.fileselect-display { flex-grow: 1; padding: 0.6rem 0.8rem; border: 1px solid var(--input-border); border-right: none; border-radius: var(--border-radius) 0 0 var(--border-radius); background-color: var(--input-bg); color: var(--text-secondary); font-size: 0.875rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.4; height: calc(1.4em + 1.2rem + 2px); /* Match textarea height */ }
-.btn-file { padding: 0.6rem 1rem; border-radius: 0 var(--border-radius) var(--border-radius) 0; background-color: var(--text-secondary); color: white; cursor: pointer; white-space: nowrap; display: flex; align-items: center; justify-content: center; font-weight: 500; transition: all var(--transition-speed); border: 1px solid var(--text-secondary); font-size: 0.8rem; height: calc(1.4em + 1.2rem + 2px); box-shadow: none; }
-.btn-file:hover { background-color: #4b5563; border-color: #4b5563; }
-
-/* Tiny Action Buttons */
-.btn-xs { padding: 0.3rem 0.6rem; font-size: 0.75rem; min-width: unset; margin-left: 0.5rem; line-height: 1.2; border-radius: calc(var(--border-radius) - 2px); box-shadow: none; vertical-align: middle; }
-.btn-fill { background-color: var(--primary-color); color: white; border: 1px solid var(--primary-color); }
-.btn-fill:hover { background-color: var(--primary-hover); border-color: var(--primary-hover); transform: none; }
-
-/* Save Panel */
-.save-panel { margin-top: 2rem; display: flex; justify-content: flex-end; padding-top: 1.5rem; border-top: 1px solid var(--border-color); }
-.btn-save { min-width: 200px; padding: 0.75rem 1.5rem; font-size: 0.95rem; font-weight: 500; }
-.btn-save .btn-icon { margin-right: 0.6rem; font-size: 1.1em; }
-
-/* No Config Selected Placeholder */
-.no-config-selected { text-align: center; padding: 4rem 2rem; color: var(--text-secondary); background-color: var(--card-bg); border: 1px dashed var(--border-color); border-radius: var(--border-radius); margin: 2rem 0; font-size: 1rem; }
-
-/* Modal Styling */
-.modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.5); backdrop-filter: blur(2px); display: flex; justify-content: center; align-items: center; z-index: 1000; animation: fadeIn 0.2s ease-out; }
-@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-.modal-content { background-color: var(--background-color); padding: 2rem; border-radius: var(--border-radius); box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15); width: 90%; max-width: 800px; max-height: 85vh; display: flex; flex-direction: column; animation: slideIn 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.1); overflow: hidden; }
-@keyframes slideIn { from { transform: translateY(20px) scale(0.98); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
-.modal-content h2 { margin-top: 0; margin-bottom: 0.75rem; color: var(--text-color); font-weight: 600; font-size: 1.25rem; }
-.modal-hint { font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 1.25rem; line-height: 1.5; }
-.json-editor-area { width: 100%; flex-grow: 1; min-height: 300px; border: 1px solid var(--input-border); border-radius: var(--border-radius); font-family: 'Fira Code', 'Consolas', monospace; font-size: 0.85rem; padding: 1rem; background-color: var(--input-bg); color: var(--input-text); resize: vertical; margin-bottom: 1.25rem; line-height: 1.6; }
-.json-editor-area:focus { outline: none; border-color: var(--input-focus); box-shadow: 0 0 0 2px var(--primary-light); }
-.modal-actions { display: flex; justify-content: flex-end; gap: 0.75rem; }
-.error-message { color: var(--error-color); background-color: rgba(239, 68, 68, 0.05); border: 1px solid var(--error-color); border-left-width: 3px; padding: 0.75rem 1rem; border-radius: var(--border-radius); margin-top: 1rem; font-size: 0.85rem; }
-
-/* Message Bubble */
-.message-bubble { position: fixed; bottom: -100px; left: 50%; transform: translateX(-50%); padding: 0.8rem 1.5rem; border-radius: var(--border-radius); color: white; font-weight: 500; z-index: 1100; box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1); opacity: 0; transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); max-width: 80%; text-align: center; font-size: 0.9rem; }
-.message-bubble.active { bottom: 1.5rem; opacity: 1; }
-.message-bubble.success { background-color: var(--success-color); }
-.message-bubble.error { background-color: var(--error-color); }
-.message-bubble.warning { background-color: var(--warning-color); color: var(--text-color); }
-.message-bubble.info { background-color: var(--info-color); }
-
-/* Responsive Adjustments */
-@media (max-width: 768px) {
-  .voice-config { padding: 1rem; }
-  .config-management-bar { flex-direction: column; align-items: stretch; padding: 1rem; }
-  .config-management-bar select { max-width: none; }
-   .proxy-config, .concurrency-config { flex-direction: column; align-items: stretch; }
-   .proxy-config label, .concurrency-config label { margin-right: 0; margin-bottom: 0.5rem; }
-   .concurrency-input { width: 100%; text-align: left;}
-
-  .gpt-prompts { grid-template-columns: 1fr; }
-  .table-header, .entry-row { flex-wrap: wrap; padding: 0.5rem; }
-  .col-index { width: 100%; text-align: left; margin-bottom: 0.5rem; padding: 0.5rem 0; font-size: 1rem; font-weight: 600; color: var(--text-color); border-bottom: 1px solid var(--border-color); }
-  .entry-row .col-index { border-bottom: none; margin-bottom: 0.75rem; font-size: 0.9rem;}
-  .col-dynamic { width: 100%; flex: none; margin-bottom: 0.75rem; padding: 0; justify-content: flex-start;} /* Reset padding */
-  .table-header .col-dynamic { padding: 0.5rem 0; } /* Add padding back to header cols */
-  .entry-row .col-dynamic { flex-direction: column; align-items: stretch; } /* Stack file input */
-  .fileselect-wrapper { flex-direction: column; align-items: stretch; }
-  .fileselect-display { border-radius: var(--border-radius) var(--border-radius) 0 0; border-right: 1px solid var(--input-border); margin-bottom: -1px; }
-  .btn-file { border-radius: 0 0 var(--border-radius) var(--border-radius); width: 100%; }
-  .save-panel { justify-content: center; }
-  .modal-content { width: 95%; padding: 1.5rem; max-height: 90vh; }
-
-  .test-controls { flex-direction: column; align-items: stretch; }
-  .audio-preview { flex-direction: column; align-items: stretch; gap: 0.5rem; }
-  .audio-preview label { min-width: unset; }
-}
-
-/* ***** NEW: Test Panel Styles ***** */
-.test-panel {
-  margin-top: 2.5rem;
-  padding: 1.5rem;
-  background-color: var(--card-bg);
-  border: 1px solid var(--border-color);
-  border-radius: var(--border-radius);
-  box-shadow: 0 2px 8px var(--shadow-light);
-}
-
-.test-panel .panel-title { /* Reuse panel title style or define specific */
-  font-size: 1.1rem;
+.current-emotion-indicator {
+  margin: 16px 16px 0; /* Adjust margin */
+  padding: 8px 12px;
+  border-radius: 6px;
+  background-color: var(--primary-color);
+  color: white;
   font-weight: 600;
-  color: var(--text-color);
-  margin-bottom: 1.25rem;
-  padding-bottom: 0.75rem;
-  border-bottom: 1px solid var(--separator-color);
+  display: inline-block;
+   font-size: 0.9rem;
+}
+
+/* Table Header */
+.table-header {
+  display: flex;
+  background-color: var(--primary-color); /* Use primary */
+  color: white;
+  padding: 12px 16px; /* Adjust padding */
+  /* border-radius: 8px 8px 0 0; */ /* Removed, handled by content-section */
+  font-weight: 600;
+  align-items: center;
+   margin-top: 16px; /* Add margin if no emotion indicator */
+}
+.content-section:not(:has(.current-emotion-indicator)) .table-header {
+    margin-top: 0; /* Remove top margin if indicator is absent */
+    border-radius: 8px 8px 0 0; /* Add border radius if it's the first element */
+}
+
+
+.col-index {
+  width: 50px; /* Narrower index */
+  text-align: center;
+  flex-shrink: 0;
+  padding-right: 8px;
+}
+
+.col-dynamic {
+  display: flex;
+  flex-grow: 1; /* Use flex-grow */
+  flex-basis: 0; /* Allow shrinking */
+  align-items: center;
+  justify-content: space-between; /* Push button to right */
+  padding: 0 10px; /* Horizontal padding */
+  gap: 8px; /* Gap between label and button */
+  border-left: 1px solid rgba(255, 255, 255, 0.2); /* Subtle separator */
+}
+.col-dynamic:first-of-type {
+    border-left: none; /* No separator for first dynamic column */
+}
+.col-dynamic > span {
+    flex-grow: 1; /* Allow label to take space */
+    text-align: left;
+}
+.col-dynamic .btn-fill {
+    flex-shrink: 0; /* Prevent button shrinking */
+}
+
+/* Entries */
+.entry-row {
+  display: flex;
+  padding: 12px 16px; /* Adjust padding */
+  border-bottom: 1px solid var(--border-color);
+  align-items: stretch; /* Stretch items to fill height */
+  transition: background-color 0.2s;
+  background-color: var(--bg-color); /* Default row background */
+}
+.entry-row .col-dynamic {
+    border-left: 1px solid var(--border-color); /* Use border color for rows */
+    padding-top: 8px; /* Add padding for textarea */
+    padding-bottom: 8px;
+}
+.entry-row .col-dynamic:first-of-type {
+    border-left: none;
+}
+.entry-row .col-index {
+    padding-top: 10px; /* Align index number better */
+}
+
+
+.entry-row:hover {
+  background-color: var(--hover-bg);
+}
+
+.entry-row:last-child {
+  border-bottom: none;
+  /* border-radius: 0 0 8px 8px; */ /* Removed, handled by content-section */
+}
+
+.even-row {
+  background-color: var(--even-row-bg); /* Use variable for even rows */
+}
+.even-row:hover {
+  background-color: var(--hover-bg); /* Hover overrides even row color */
+}
+
+/* File Select */
+.fileselect-wrapper {
+  /* position: relative; */ /* Not needed with flex */
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 8px;
+}
+
+.fileselect-display {
+  flex-grow: 1;
+  /* padding-right: 90px; */ /* Removed, gap handles spacing */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: default;
+   padding: 8px 10px; /* Match input padding */
+   min-height: 38px; /* Match input height */
+}
+
+.btn-file {
+  /* position: absolute; */ /* Removed */
+  /* right: 0; */ /* Removed */
+  /* top: 0; */ /* Removed */
+  /* bottom: 0; */ /* Removed */
+  /* border-radius: 0 6px 6px 0; */ /* Removed */
+  border-radius: 6px; /* Standard radius */
+  /* display: flex; */ /* Already a flex item */
+  /* align-items: center; */ /* Already aligned */
+  flex-shrink: 0; /* Prevent shrinking */
+}
+
+/* Textarea inside rows */
+.entry-row .form-textarea {
+    min-height: 40px; /* Smaller min-height */
+    height: auto; /* Allow shrinking */
+    padding: 8px 10px; /* Adjust padding */
+     resize: none; /* Disable manual resize */
+}
+
+
+/* Test Panel */
+.test-panel {
+  background-color: var(--test-panel-bg);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 24px;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--test-panel-border); /* Use variable */
+}
+
+.panel-title {
+  color: var(--info-color);
+  font-size: 1.4rem;
+  margin-bottom: 16px;
+  font-weight: 600;
 }
 
 .test-controls {
   display: flex;
-  align-items: center;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
   flex-wrap: wrap;
+  align-items: flex-end; /* Align items to bottom */
+  gap: 16px;
+  margin-bottom: 16px;
 }
 
-.btn-test {
-  min-width: 140px; /* Ensure button text fits */
-  background-color: var(--info-color);
-  color: white; /* White text on info color */
-  border-color: var(--info-color);
-}
-body.dark-theme .btn-test {
-     color: var(--text-color); /* Dark theme text on info color */
+.test-control-item {
+  flex: 1; /* Allow items to grow */
+  min-width: 180px; /* Adjust min-width */
 }
 
-.btn-test:hover:not(:disabled) {
-  background-color: #2563eb; /* Darker info blue */
-  border-color: #2563eb;
-}
-body.dark-theme .btn-test:hover:not(:disabled) {
-    background-color: #93c5fd; /* Lighter blue hover for dark */
-    border-color: #93c5fd;
+.test-control-item label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 500;
+  color: var(--text-color); /* Use variable */
 }
 
+.test-button-container {
+  /* align-self: flex-end; */ /* Flex aligns this already */
+  display: flex;
+  flex-direction: column; /* Stack button and status */
+  align-items: flex-start;
+  flex-basis: 200px; /* Give button container some base width */
+  flex-grow: 0; /* Don't let it grow excessively */
+}
 
 .test-status-text {
-    color: var(--text-secondary);
-    font-style: italic;
-    font-size: 0.9rem;
+  font-size: 0.9rem;
+  color: var(--info-color);
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
+.test-gptreturn-input {
+  width: 100%;
+}
+
+/* Test Results */
 .test-results {
-    margin-top: 1rem;
-    border-top: 1px solid var(--separator-color);
-    padding-top: 1.5rem;
-}
-
-.test-error-msg {
-    margin-bottom: 1rem;
-    /* Use existing error-message styles or customize */
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--test-panel-border); /* Use variable */
 }
 
 .audio-preview {
-  margin-bottom: 1rem;
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  flex-wrap: wrap; /* Wrap on small screens */
+  margin-bottom: 16px; /* Increased spacing */
+  padding: 12px;
+  background-color: rgba(255, 255, 255, 0.05); /* Subtle background */
+   border: 1px solid var(--border-color); /* Add border */
+  border-radius: 8px;
+}
+:global(body.dark-theme) .audio-preview {
+    background-color: rgba(0, 0, 0, 0.1); /* Darker subtle background */
 }
 
+
 .audio-preview label {
-  font-weight: 500;
-  min-width: 120px; /* Align labels */
-  color: var(--text-secondary);
-  font-size: 0.9rem;
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600; /* Bolder label */
+  color: var(--info-color); /* Use info color */
+   font-size: 0.9rem;
 }
 
 .audio-preview audio {
-  height: 40px; /* Control audio player height */
-  max-width: 100%; /* Ensure player is responsive */
-  flex-grow: 1;
+  width: 100%;
+  border-radius: 4px;
+  /* Improve audio player appearance in dark mode */
+  filter: var(--audio-filter, none);
+}
+:global(body.dark-theme) .audio-preview audio {
+   /* Example: Invert colors for dark mode if needed */
+   /* filter: invert(1) hue-rotate(180deg); */
+   --audio-filter: contrast(1.1) brightness(0.9); /* Adjust contrast/brightness */
+   border: 1px solid var(--border-color); /* Add border in dark mode */
 }
 
-/* Spinner animation */
-.spinner {
+
+/* Save Panel */
+.save-panel {
+  display: flex;
+  justify-content: center;
+  margin-top: 32px; /* Increased margin */
+  padding-top: 24px; /* Add padding top */
+  border-top: 1px solid var(--separator-color); /* Separator */
+}
+
+.btn-save {
+  padding: 12px 24px;
+  font-size: 1.1rem;
+  min-width: 250px; /* Give save button min width */
+}
+
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--modal-overlay-bg); /* Use variable */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  backdrop-filter: blur(3px); /* Slightly more blur */
+  padding: 20px; /* Add padding to overlay */
+}
+
+.modal-content {
+  background-color: var(--bg-color);
+  border-radius: 12px;
+  padding: 24px 32px; /* Adjust padding */
+  max-width: 800px;
+  width: 100%; /* Use full width up to max */
+  max-height: calc(100vh - 80px); /* Limit height */
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  overflow: hidden; /* Prevent content overflow */
+}
+.modal-content h2 {
+  margin-bottom: 16px;
+  color: var(--primary-color);
+  font-size: 1.5rem; /* Adjust size */
+  flex-shrink: 0; /* Prevent shrinking */
+}
+
+.modal-hint {
+  margin-bottom: 16px;
+  color: var(--text-secondary); /* Use secondary text */
+  font-size: 0.9rem;
+  flex-shrink: 0; /* Prevent shrinking */
+}
+
+.json-editor-area {
+  flex-grow: 1; /* Allow editor to take available space */
+  /* height: 400px; */ /* Removed fixed height */
+  min-height: 200px; /* Set minimum height */
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 14px;
+  margin-bottom: 16px;
+   border: 1px solid var(--input-border); /* Add border */
+   background-color: var(--input-bg); /* Use input bg */
+   color: var(--text-color); /* Use text color */
+}
+.json-editor-area:focus {
+    border-color: var(--input-focus-border);
+    box-shadow: 0 0 0 3px var(--input-focus-shadow);
+    outline: none;
+}
+
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 16px;
+  flex-shrink: 0; /* Prevent shrinking */
+}
+
+/* Error Messages */
+.error-message {
+  padding: 10px 16px; /* Adjust padding */
+  background-color: var(--error-bg); /* Use variable */
+  border-left: 5px solid var(--danger-color); /* Thicker border */
+  color: var(--error-text); /* Use variable */
+  margin-bottom: 16px;
+  border-radius: 4px;
+  font-size: 0.9rem; /* Adjust size */
+  line-height: 1.4; /* Improve readability */
+}
+.error-message strong {
+    font-weight: 600;
+    margin-right: 4px;
+}
+
+/* Applied directly in :global(body.dark-theme) .voice-config */
+/* :global(body.dark-theme) .error-message { */
+  /* background-color: rgba(239, 68, 68, 0.2); */
+  /* color: #fca5a5; */
+/* } */
+
+.test-error-msg {
+   /* Inherits general error styling */
+   margin-top: 10px; /* Add margin if it appears in results */
+}
+
+
+/* Message Bubble */
+.message-bubble {
+  position: fixed;
+  bottom: -100px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 12px 24px;
+  border-radius: 8px;
+  background-color: var(--bg-color); /* Use bg color */
+  color: var(--text-color); /* Use text color */
+  border: 1px solid var(--border-color); /* Add subtle border */
+  box-shadow: var(--shadow-md); /* Use darker shadow */
+  z-index: 1000;
+  transition: bottom 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55); /* Bouncy transition */
+  max-width: 90%;
+  text-align: center;
+  font-weight: 500;
+}
+
+.message-bubble.active {
+  bottom: 24px;
+}
+
+/* Type indicator borders */
+.message-bubble.success { border-left: 4px solid var(--success-color); }
+.message-bubble.error { border-left: 4px solid var(--danger-color); }
+.message-bubble.warning { border-left: 4px solid var(--warning-color); }
+.message-bubble.info { border-left: 4px solid var(--info-color); }
+
+/* Loading Spinner (Used by Font Awesome now) */
+/* .spinner {
   display: inline-block;
-  width: 1em; /* Size relative to font size */
-  height: 1em;
-  border: 2px solid rgba(255, 255, 255, 0.3);
+  width: 16px;
+  height: 16px;
+  border: 3px solid rgba(255, 255, 255, 0.3);
   border-radius: 50%;
-  border-top-color: #fff;
+  border-top-color: white;
   animation: spin 1s ease-in-out infinite;
-  margin-right: 0.5rem;
-  vertical-align: middle; /* Align with text */
+  margin-right: 8px;
 }
-body.dark-theme .spinner {
-    border: 2px solid rgba(255, 255, 255, 0.3); /* Spinner color for dark theme */
-    border-top-color: #fff;
-}
-
 
 @keyframes spin {
   to { transform: rotate(360deg); }
-}
+} */
 
-/* ***** End Test Panel Styles ***** */
+/* Responsive Design */
+@media (max-width: 768px) {
+  .voice-config {
+      padding: 16px; /* Reduce padding */
+  }
+  .config-management-bar {
+    /* flex-direction: column; */ /* Keep flex-row but allow wrap */
+    /* align-items: stretch; */
+    gap: 8px; /* Reduce gap */
+  }
+  #config-select {
+      min-width: 150px; /* Adjust min-width */
+  }
 
-/* Adjust other styles if needed */
+  .proxy-concurrency-row {
+      gap: 16px; /* Reduce gap */
+      padding: 12px; /* Reduce padding */
+  }
 
-/* Ensure message bubble has warning/info styles if not present */
-.message-bubble.warning {
-  background-color: var(--warning-color);
-  color: #1f2937; /* Darker text on yellow */
-}
-.message-bubble.info {
-  background-color: var(--info-color);
-}
-body.dark-theme .message-bubble.warning {
-   background-color: var(--warning-color);
-   color: var(--text-color); /* Lighter text on dark yellow */
-}
-body.dark-theme .message-bubble.info {
-   background-color: var(--info-color);
+  .test-controls {
+    /* flex-direction: column; */ /* Keep row but allow wrap */
+    /* align-items: stretch; */ /* Keep align-items: flex-end */
+     gap: 12px; /* Reduce gap */
+  }
+  .test-control-item {
+      min-width: 150px; /* Reduce min-width */
+  }
+
+
+  .content-section {
+    overflow-x: auto; /* Keep horizontal scroll for table */
+  }
+
+  .table-header, .entry-row {
+    min-width: 700px; /* Adjust min-width as needed */
+  }
+  .col-dynamic {
+      padding: 0 8px; /* Reduce padding */
+  }
+
+  .modal-content {
+      padding: 16px 20px; /* Reduce modal padding */
+      max-height: calc(100vh - 40px); /* Adjust max height */
+  }
+  .json-editor-area {
+      font-size: 13px; /* Slightly smaller font */
+  }
 }
 </style>
