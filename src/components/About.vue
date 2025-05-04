@@ -1,5 +1,5 @@
 <template>
-  <!-- Main container using global card style -->
+<div>
   <div class="about-container card">
     <!-- Title Section -->
     <div class="title-section">
@@ -194,6 +194,7 @@
     </div>
   </div>
 
+</div>
 </template>
 
 <script>
