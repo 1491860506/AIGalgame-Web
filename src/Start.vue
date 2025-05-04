@@ -461,7 +461,7 @@ const displayedLogs = computed(() => {
 const logKeywords = {
   outlineStory: ['正在生成大纲', '获取到故事标题', '正在生成故事开篇', '故事开篇生成失败', '故事开篇完成', '开始生成新故事', '开始准备本地故事', '故事文件'],
   voice: ['语音处理ID', '语音生成失败：', '语音生成结束', '开始生成语音', '语音信息：', '语音生成并发数：', '语音待生成数：', '语音合成完成', '语音合成失败'], // Combined keywords
-  music: ['生成音乐：', '生成音乐失败：', '背景音乐已禁用', '背景音乐生成失败', '下载并保存音乐文件'], // Combined keywords
+  music: ['生成音乐：', '生成音乐失败：', '背景音乐', '背景音乐生成失败', '下载并保存音乐文件'], // Combined keywords
   image: ['AI_draw Error:', 'AI_draw:', '图像生成失败', 'Progress:', 'Main model manager exhausted', 'tasks completed normally', '生成图片'], // Combined keywords + common terms
 };
 

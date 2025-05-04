@@ -1,71 +1,61 @@
 <template>
-  <div>
-  <div class="about-container">
+  <!-- Main container using global card style -->
+  <div class="about-container card">
     <!-- Title Section -->
     <div class="title-section">
       <div class="logo-title">
+        <!-- Re-use app logo style -->
         <div class="app-logo">
           <font-awesome-icon :icon="['fas', 'gamepad']" />
         </div>
         <h1 class="app-title">AI galgame生成器</h1>
       </div>
-      <div class="version-info">V{{ currentVersion }}</div>
+      <div class="version-info">版本: V{{ currentVersion }}</div>
     </div>
 
-    <div class="divider"></div>
+    <hr class="separator"> <!-- Use global separator -->
 
     <!-- Update Buttons Section -->
     <div class="update-section">
-      <button class="btn btn-primary" @click="checkForUpdates">
-        <font-awesome-icon :icon="['fas', 'sync']" class="btn-icon-fa" />
-        检查更新
+      <button class="btn btn-primary" @click="checkForUpdates" :disabled="isCheckingOrLoading">
+        <font-awesome-icon v-if="isCheckingUpdate" :icon="['fas', 'spinner']" spin />
+        <font-awesome-icon v-else :icon="['fas', 'sync']" />
+        {{ isCheckingUpdate ? '检查中...' : '检查更新' }}
       </button>
-      <button class="btn btn-secondary" @click="showVersionSelector">
-        <font-awesome-icon :icon="['fas', 'download']" class="btn-icon-fa" />
-        下载特定版本
+      <button class="btn btn-secondary" @click="showVersionSelector" :disabled="isCheckingOrLoading">
+        <font-awesome-icon v-if="isLoadingVersions" :icon="['fas', 'spinner']" spin />
+        <font-awesome-icon v-else :icon="['fas', 'download']" />
+         {{ isLoadingVersions ? '加载版本...' : '下载特定版本' }}
       </button>
     </div>
 
-    <div class="divider"></div>
+    <hr class="separator">
 
     <!-- Content Section -->
     <div class="content-section">
       <!-- Help & Documentation Section -->
-      <div class="card">
-        <h2 class="card-title">
-          <font-awesome-icon :icon="['fas', 'book']" class="card-icon-fa" />
+      <div class="inner-card card"> <!-- Apply card style to inner sections -->
+        <h2 class="inner-card-title">
+          <font-awesome-icon :icon="['fas', 'book']" />
           帮助与文档
         </h2>
         <div class="card-content">
-          <!-- 原“查看在线文档”改为“查看项目文档” -->
           <div class="action-row">
             <div class="action-label">
-              <span>用户手册</span>
+              <span>用户手册 / 项目文档</span>
             </div>
-            <button class="btn btn-primary" @click="openUrl('https://aigal.qqframe.cn')">
-              <font-awesome-icon :icon="['fas', 'file-alt']" class="btn-icon-fa" />
-              查看项目文档
+            <button class="btn btn-outline" @click="openUrl('https://aigal.qqframe.cn')">
+              <font-awesome-icon :icon="['fas', 'file-alt']" />
+              查看文档
             </button>
           </div>
-
-          <!-- 新增“查看配置说明” -->
-          <div class="action-row">
-             <div class="action-label">
-              <span>配置说明</span>
-            </div>
-            <button class="btn btn-primary" @click="openUrl('/docs')">
-              <font-awesome-icon :icon="['fas', 'cogs']" class="btn-icon-fa" /> <!-- 使用齿轮图标或您喜欢的其他图标 -->
-              查看配置说明
-            </button>
-          </div>
-
         </div>
       </div>
 
       <!-- About Software Section -->
-      <div class="card">
-        <h2 class="card-title">
-          <font-awesome-icon :icon="['fas', 'info-circle']" class="card-icon-fa" />
+      <div class="inner-card card"> <!-- Apply card style to inner sections -->
+        <h2 class="inner-card-title">
+          <font-awesome-icon :icon="['fas', 'info-circle']" />
           关于软件
         </h2>
         <div class="card-content">
@@ -73,21 +63,21 @@
             这是一款利用AI自动生成galgame的工具，支持角色、背景音乐、语音和场景的生成。
           </p>
 
-          <div class="features">
+          <div class="features-grid"> <!-- Use a grid for features -->
             <div class="feature-item">
-              <font-awesome-icon :icon="['fas', 'users']" class="feature-icon-fa" />
+              <font-awesome-icon :icon="['fas', 'users']" class="feature-icon" />
               <span class="feature-text">角色生成</span>
             </div>
             <div class="feature-item">
-              <font-awesome-icon :icon="['fas', 'music']" class="feature-icon-fa" />
+              <font-awesome-icon :icon="['fas', 'music']" class="feature-icon" />
               <span class="feature-text">背景音乐</span>
             </div>
             <div class="feature-item">
-              <font-awesome-icon :icon="['fas', 'microphone']" class="feature-icon-fa" />
+              <font-awesome-icon :icon="['fas', 'microphone']" class="feature-icon" />
               <span class="feature-text">语音生成</span>
             </div>
             <div class="feature-item">
-              <font-awesome-icon :icon="['fas', 'image']" class="feature-icon-fa" />
+              <font-awesome-icon :icon="['fas', 'image']" class="feature-icon" />
               <span class="feature-text">场景生成</span>
             </div>
           </div>
@@ -97,873 +87,801 @@
       </div>
     </div>
 
+    <hr class="separator">
+
     <!-- Footer Section -->
     <div class="footer-section">
-      <button class="btn btn-link" @click="openUrl('https://github.com/1491860506/AIGal')">
-        <font-awesome-icon :icon="['fab', 'github']" class="btn-icon-fa" />
+      <button class="btn btn-text" @click="openUrl('https://github.com/1491860506/AIGal')">
+        <font-awesome-icon :icon="['fab', 'github']" />
         GitHub
       </button>
 
-      <button class="btn btn-link" @click="openUrl('https://aigal.qqframe.cn')">
-        <font-awesome-icon :icon="['fas', 'globe']" class="btn-icon-fa" />
+      <button class="btn btn-text" @click="openUrl('https://aigal.qqframe.cn')">
+        <font-awesome-icon :icon="['fas', 'globe']" />
         官方网站
       </button>
 
-      <button class="btn btn-link" @click="openUrl('mailto:admin@qqframe.cn')">
-        <font-awesome-icon :icon="['fas', 'envelope']" class="btn-icon-fa" />
+      <button class="btn btn-text" @click="openUrl('mailto:admin@qqframe.cn')">
+        <font-awesome-icon :icon="['fas', 'envelope']" />
         联系我们
       </button>
     </div>
   </div>
 
-  <!-- Update Modal -->
-  <div class="modal" v-if="showUpdateModal">
-    <div class="modal-content">
+  <!-- Update Modal - Only shown if updateStatus is 'update-available' -->
+  <!-- Added @click.self="closeModal" for backdrop click close -->
+  <div class="modal" v-if="showUpdateModal && updateStatus === 'update-available'" @click.self="closeModal">
+    <div class="modal-content card"> <!-- Apply card style -->
       <div class="modal-header">
-        <h3>软件更新</h3>
-        <button class="close-button" @click="closeModal">
+        <h3 class="modal-title">软件更新</h3>
+        <button class="close-button btn btn-text btn-sm" @click="closeModal" title="关闭">
           <font-awesome-icon :icon="['fas', 'times']" />
         </button>
       </div>
       <div class="modal-body">
-        <div v-if="updateStatus === 'checking'">
-          <p>正在检查更新...</p>
-          <div class="loading-spinner"></div>
-        </div>
-        <div v-else-if="updateStatus === 'up-to-date'">
-          <p>当前已是最新版本 (V{{ currentVersion }})</p>
-        </div>
-        <div v-else-if="updateStatus === 'update-available'">
           <p>检测到新版本：</p>
-          <div class="version-option" v-if="latestStableVersion">
-            <h4>
+          <div class="version-option card" v-if="latestStableVersion"> <!-- Apply card style -->
+            <h4 class="version-option-title">
               <font-awesome-icon :icon="['fas', 'check-circle']" class="version-icon stable" />
               正式版 V{{ latestStableVersion.version }}
             </h4>
             <p class="version-description">{{ latestStableVersion.description }}</p>
             <button class="btn btn-primary" @click="downloadVersion(latestStableVersion)">
-              <font-awesome-icon :icon="['fas', 'download']" class="btn-icon-fa" />
+              <font-awesome-icon :icon="['fas', 'download']" />
               下载正式版
             </button>
           </div>
-          <div class="version-option" v-if="latestTestVersion">
-            <h4>
+          <div class="version-option card" v-if="latestTestVersion"> <!-- Apply card style -->
+            <h4 class="version-option-title">
               <font-awesome-icon :icon="['fas', 'flask']" class="version-icon test" />
               测试版 V{{ latestTestVersion.version }}
             </h4>
             <p class="version-description">{{ latestTestVersion.description }}</p>
             <button class="btn btn-secondary" @click="downloadVersion(latestTestVersion)">
-              <font-awesome-icon :icon="['fas', 'download']" class="btn-icon-fa" />
+              <font-awesome-icon :icon="['fas', 'download']" />
               下载测试版
             </button>
           </div>
-        </div>
-        <div v-else-if="updateStatus === 'downloading'">
-          <p>正在准备下载 V{{ downloadingVersion }}...</p>
-        </div>
-        <div v-else-if="updateStatus === 'error'">
-          <p>检查更新时发生错误：{{ errorMessage }}</p>
-        </div>
       </div>
+       <!-- No footer needed for this modal -->
     </div>
   </div>
 
-  <!-- Version Selector Modal -->
-  <div class="modal" v-if="showVersionSelectorModal">
-    <div class="modal-content">
+  <!-- Version Selector Modal - Only shown if versionList is populated -->
+   <!-- Added @click.self="closeModal" for backdrop click close -->
+  <div class="modal" v-if="showVersionSelectorModal && versionList.length > 0" @click.self="closeModal">
+    <div class="modal-content card"> <!-- Apply card style -->
       <div class="modal-header">
-        <h3>选择下载版本</h3>
-        <button class="close-button" @click="closeModal">
+        <h3 class="modal-title">选择下载版本</h3>
+        <button class="close-button btn btn-text btn-sm" @click="closeModal" title="关闭">
           <font-awesome-icon :icon="['fas', 'times']" />
         </button>
       </div>
       <div class="modal-body">
-        <div v-if="versionList.length === 0">
-          <p>正在加载版本信息...</p>
-          <div class="loading-spinner"></div>
-        </div>
-        <div v-else>
-          <div class="os-selector">
-            <label>选择操作系统：</label>
-            <select v-model="selectedOS">
-              <option value="windows">Windows</option>
-              <option value="linux">Linux</option>
-              <option value="mac">macOS</option>
-              <option value="android">Android</option>
-            </select>
-          </div>
-          
-          <div class="version-list">
-            <div v-for="(version, index) in versionList" :key="index" class="version-item">
-              <div class="version-header">
-                <h4>
-                  <font-awesome-icon 
-                    :icon="['fas', isTestVersion(version.version) ? 'flask' : 'check-circle']" 
-                    :class="['version-icon', isTestVersion(version.version) ? 'test' : 'stable']" 
-                  />
-                  V{{ version.version }}
-                </h4>
-                <span class="version-tag" v-if="isTestVersion(version.version)">测试版</span>
-                <span class="version-tag stable" v-else>正式版</span>
-              </div>
-              <p class="version-description">{{ version.description }}</p>
-              <button class="btn btn-primary" @click="downloadVersion(version)">
-                <font-awesome-icon :icon="['fas', 'download']" class="btn-icon-fa" />
-                下载此版本
-              </button>
-            </div>
-          </div>
-        </div>
+         <div class="os-selector form-group">
+           <label class="form-label">选择操作系统：</label>
+           <select v-model="selectedOS" class="select">
+             <option value="windows">Windows</option>
+             <option value="linux">Linux</option>
+             <option value="mac">macOS</option>
+             <option value="android">Android</option>
+           </select>
+         </div>
+
+         <div class="version-list">
+           <div v-for="(version, index) in versionList" :key="index" class="version-item card"> <!-- Apply card style -->
+             <div class="version-header">
+               <h4 class="version-item-title">
+                 <font-awesome-icon
+                   :icon="['fas', isTestVersion(version.version) ? 'flask' : 'check-circle']"
+                   :class="['version-icon', isTestVersion(version.version) ? 'test' : 'stable']"
+                 />
+                 V{{ version.version }}
+               </h4>
+               <span class="version-tag" :class="isTestVersion(version.version) ? 'warning' : 'secondary'"> <!-- Use badge-like classes -->
+                 {{ isTestVersion(version.version) ? '测试版' : '正式版' }}
+               </span>
+             </div>
+             <p class="version-description">{{ version.description }}</p>
+             <button class="btn btn-primary" @click="downloadVersion(version)">
+               <font-awesome-icon :icon="['fas', 'download']" />
+               下载此版本 ({{ selectedOS }})
+             </button>
+           </div>
+         </div>
       </div>
+       <!-- No footer needed for this modal -->
     </div>
   </div>
-</div>
+
 </template>
 
-
 <script>
+// Ensure icons used are imported in main.js for global registration
+// Icons: gamepad, sync, download, book, file-alt, info-circle, users, music, microphone, image, github (fab), globe, envelope, times, check-circle, flask, spinner
+
 export default {
   name: 'About',
-  emits: ['showMessage'],
+  emits: ['showMessage'], // Declare emitted events
   data() {
     return {
-      currentVersion: '1.0.5',
-      versionList: [],
-      showUpdateModal: false,
-      showVersionSelectorModal: false,
-      updateStatus: '',
-      errorMessage: '',
-      latestStableVersion: null,
-      latestTestVersion: null,
-      downloadingVersion: '',
-      selectedOS: this.detectOS(),
+      currentVersion: '1.0.5', // Assume this is fetched or defined elsewhere, or hardcoded
+      versionList: [], // Full list of versions
+      showUpdateModal: false, // Controls update modal visibility
+      showVersionSelectorModal: false, // Controls version selector modal visibility
+      updateStatus: '', // 'checking', 'up-to-date', 'update-available', 'error', 'downloading' (simplified states for fetch)
+      errorMessage: '', // Store error message if fetch fails
+      latestStableVersion: null, // Latest stable fetched
+      latestTestVersion: null, // Latest test fetched
+      // downloadingVersion: '', // Not strictly needed with the new flow, can show message via emit
+      selectedOS: this.detectOS(), // Detected or selected OS
+      isCheckingUpdate: false, // Loading state for check update button
+      isLoadingVersions: false, // Loading state for download specific version button
     };
   },
+  computed: {
+    // Helper to disable buttons while checking or loading versions
+    isCheckingOrLoading() {
+        return this.isCheckingUpdate || this.isLoadingVersions;
+    }
+  },
   methods: {
+    // Emit message using the global toastification
+    emitMessage(type, message) {
+        // Map types to toastification types (success, error, warning, info)
+        const toastType = type === 'success' ? 'success' :
+                           type === 'error' ? 'error' :
+                           type === 'warning' ? 'warning' :
+                           'info'; // Default to info
+
+        this.$emit('showMessage', { title: toastType, message: message });
+    },
+
     openUrl(url) {
-      // Open URL in a new tab
-      // Added window.location.origin for local paths like /docs
       const targetUrl = url.startsWith('/') ? window.location.origin + url : url;
       window.open(targetUrl, '_blank');
     },
-    
-    // 检测当前操作系统
+
     detectOS() {
       const userAgent = navigator.userAgent.toLowerCase();
-      
       if (userAgent.indexOf('windows') !== -1) return 'windows';
       if (userAgent.indexOf('mac') !== -1) return 'mac';
-      if (userAgent.indexOf('linux') !== -1 && userAgent.indexOf('android') === -1) return 'linux';
       if (userAgent.indexOf('android') !== -1) return 'android';
-      
-      // 默认返回 windows
-      return 'windows';
+      if (userAgent.indexOf('linux') !== -1) return 'linux'; // Generic linux after android
+      return 'windows'; // Default fallback
     },
-    
-    // 获取版本信息
+
+    // Fetch version information with error handling
     async fetchVersionInfo() {
-      try {
-        const response = await fetch('https://r2.qqframe.cn/aigal/version_web.json');
-        if (!response.ok) {
-          throw new Error('无法获取版本信息');
+        try {
+            const response = await fetch('https://cors_proxy.qqframe.cn/aigalweb_version');
+            if (!response.ok) {
+                 // Use response status text or custom error message
+                const errorDetail = response.statusText || 'Unknown network error';
+                console.error(`Failed to fetch version info: HTTP status ${response.status}`, errorDetail);
+                throw new Error(`无法获取版本信息 (状态: ${response.status})`);
+            }
+            const data = await response.json();
+            // Basic check if the data looks like a list of versions
+            if (!Array.isArray(data) || data.length === 0 || !data[0].hasOwnProperty('version')) {
+                 console.error("Fetched data is not a valid version list:", data);
+                 throw new Error('获取的版本信息格式不正确');
+            }
+            return data;
+        } catch (error) {
+            console.error('Fetch version info failed:', error);
+            // Rethrow the error so the caller can catch it and emit a message
+            throw error;
         }
-        return await response.json();
-      } catch (error) {
-        console.error('获取版本信息失败：', error);
-        this.errorMessage = error.message;
-        this.updateStatus = 'error';
-        return [];
-      }
     },
-    
-    // 检查更新
+
+    // Check for updates
     async checkForUpdates() {
-      this.showUpdateModal = true;
-      this.updateStatus = 'checking';
-      
+      this.isCheckingUpdate = true; // Start loading state
+      this.updateStatus = 'checking'; // Indicate state (for internal logic if needed)
+      this.errorMessage = ''; // Clear previous errors
+      this.latestStableVersion = null;
+      this.latestTestVersion = null;
+      this.closeModal(); // Ensure other modals are closed
+
+      this.emitMessage('info', '正在检查更新...');
+
       try {
         const versions = await this.fetchVersionInfo();
-        
-        if (versions.length === 0) {
-          this.updateStatus = 'error';
-          this.errorMessage = '没有找到版本信息';
-          return;
-        }
-        
-        // 分离正式版和测试版
+
+        // Process versions only on success
         const stableVersions = versions.filter(v => !this.isTestVersion(v.version));
         const testVersions = versions.filter(v => this.isTestVersion(v.version));
-        
-        // 找出最新的正式版和测试版
+
         this.latestStableVersion = this.findLatestVersion(stableVersions);
         this.latestTestVersion = this.findLatestVersion(testVersions);
-        
-        // 决定是否需要更新
-        const needsUpdate = 
+
+        // Determine if update is needed
+        const needsUpdate =
           (this.latestStableVersion && this.compareVersions(this.latestStableVersion.version, this.currentVersion) > 0) ||
-          (this.latestTestVersion && this.compareVersions(this.latestTestVersion.version.replace('t', ''), this.currentVersion) > 0);
-        
-        this.updateStatus = needsUpdate ? 'update-available' : 'up-to-date';
-        
+          (this.latestTestVersion && this.compareVersions(this.latestTestVersion.version.replace('t', ''), this.currentVersion) > 0); // Compare test versions without 't' prefix
+
+        if (needsUpdate) {
+            this.updateStatus = 'update-available'; // State indicates update is available
+            this.emitMessage('info', '检测到新版本');
+             this.showUpdateModal = true; // Open modal only if update is available
+        } else {
+            this.updateStatus = 'up-to-date'; // State indicates it's up-to-date
+            this.emitMessage('success', `当前已是最新版本 (V${this.currentVersion})`);
+             // Do NOT open modal if it's up-to-date
+             this.showUpdateModal = false; // Explicitly ensure it's false
+        }
+
       } catch (error) {
-        console.error('检查更新失败：', error);
+        // Fetch failed - emit error message and do NOT open modal (handled by v-if)
         this.updateStatus = 'error';
         this.errorMessage = error.message;
+        this.emitMessage('error', `检查更新失败: ${error.message}`);
+         this.showUpdateModal = false; // Explicitly ensure it's false
+      } finally {
+        this.isCheckingUpdate = false; // End loading state
       }
     },
-    
-    // 显示版本选择器
+
+    // Show version selector
     async showVersionSelector() {
-      this.showVersionSelectorModal = true;
-      this.versionList = [];
-      
+      this.isLoadingVersions = true; // Start loading state
+      this.versionList = []; // Clear previous list
+      this.errorMessage = ''; // Clear previous errors
+      this.closeModal(); // Ensure other modals are closed
+
+      this.emitMessage('info', '正在加载版本列表...');
+
       try {
         const versions = await this.fetchVersionInfo();
-        // 按版本号排序（降序）
-        this.versionList = versions.sort((a, b) => 
-          this.compareVersions(b.version.replace('t', ''), a.version.replace('t', ''))
+
+        // Sort versions descending
+        this.versionList = versions.sort((a, b) =>
+          this.compareVersions(b.version.replace(/^t/, ''), a.version.replace(/^t/, '')) // Use regex for robust 't' removal
         );
+        this.emitMessage('success', '版本列表加载成功');
+        this.showVersionSelectorModal = true; // Open modal on success
+
       } catch (error) {
-        console.error('获取版本列表失败：', error);
+        // Fetch failed - emit error message and do NOT open modal (handled by v-if)
+        this.errorMessage = error.message;
+        this.emitMessage('error', `加载版本列表失败: ${error.message}`);
+         this.showVersionSelectorModal = false; // Explicitly ensure it's false
+      } finally {
+        this.isLoadingVersions = false; // End loading state
       }
     },
-    
-    // 下载指定版本
+
+    // Download specified version
     downloadVersion(version) {
-      this.downloadingVersion = version.version;
-      this.updateStatus = 'downloading';
-      
-      // 根据所选操作系统确定下载链接
+      // Check if version object is valid and has the necessary properties
+      if (!version || typeof version.version !== 'string') {
+           console.error("Invalid version object provided for download:", version);
+           this.emitMessage('error', '无效的版本信息，无法下载。');
+           return;
+      }
+
       const osMap = {
         'windows': 'url_windows',
         'linux': 'url_linux',
         'mac': 'url_mac',
         'android': 'url_android'
       };
-      
+
       const downloadUrl = version[osMap[this.selectedOS]];
-      
+
       if (downloadUrl) {
-        // 执行下载操作
+        this.emitMessage('info', `正在尝试下载 V${version.version} (${this.selectedOS})...`);
         window.open(downloadUrl, '_blank');
-        
-        // 延迟关闭模态框
-        setTimeout(() => {
-          this.closeModal();
-        }, 1000);
+        this.closeModal(); // Close modal after initiating download
       } else {
-        this.errorMessage = `没有找到适用于 ${this.selectedOS} 的下载链接`;
-        this.updateStatus = 'error';
+        // Download URL not found for the selected OS
+        const errorMessage = `没有找到适用于 "${this.selectedOS}" 的 V${version.version} 下载链接。`;
+        console.warn(errorMessage, version);
+        this.errorMessage = errorMessage; // Store internally if needed for debug
+        this.emitMessage('warning', errorMessage);
+        // Do NOT close the modal here, the user might want to select a different OS or version
       }
     },
-    
-    // 关闭所有模态框
+
     closeModal() {
       this.showUpdateModal = false;
       this.showVersionSelectorModal = false;
-      this.updateStatus = '';
+      this.updateStatus = ''; // Reset status when closing
+      this.errorMessage = ''; // Clear error message
+      // Do not reset latest versions or versionList here, they persist until next fetch
     },
-    
-    // 判断是否为测试版本
+
     isTestVersion(version) {
       return version.startsWith('t');
     },
-    
-    // 查找最新版本
+
     findLatestVersion(versions) {
-      if (versions.length === 0) return null;
-      
+      if (!versions || versions.length === 0) return null;
+
       return versions.reduce((latest, current) => {
-        const latestVersion = latest.version.replace('t', '');
-        const currentVersion = current.version.replace('t', '');
-        
-        return this.compareVersions(currentVersion, latestVersion) > 0 ? current : latest;
+        // Ensure comparison ignores the 't' prefix for test versions
+        const latestVer = latest.version.replace(/^t/, '');
+        const currentVer = current.version.replace(/^t/, '');
+        return this.compareVersions(currentVer, latestVer) > 0 ? current : latest;
       }, versions[0]);
     },
-    
-    // 版本号比较
+
     compareVersions(v1, v2) {
-      // 移除前缀 't' (if any)
-      v1 = v1.replace(/^t/, '');
-      v2 = v2.replace(/^t/, '');
-      
       const parts1 = v1.split('.').map(Number);
       const parts2 = v2.split('.').map(Number);
-      
+
       const maxLength = Math.max(parts1.length, parts2.length);
-      
+
       for (let i = 0; i < maxLength; i++) {
-        const p1 = parts1[i] || 0; // Treat missing parts as 0
+        const p1 = parts1[i] || 0;
         const p2 = parts2[i] || 0;
-        
+
         if (p1 > p2) return 1;
         if (p1 < p2) return -1;
       }
-      
-      return 0; // Versions are equal
+      return 0;
     }
   }
 };
 </script>
 
 <style scoped>
+/* Main container using global card style */
 .about-container {
-  max-width: 800px;
-  margin: 0 auto;
-  padding: 2rem;
-  font-family: 'Arial', sans-serif;
-  color: var(--text-primary, #333);
-  background-color: var(--content-bg, #f9f9f9);
-  border-radius: 12px;
-  box-shadow: var(--shadow, 0 2px 12px rgba(0, 0, 0, 0.1));
-  transition: all 0.3s ease;
-  position: relative; /* For modal positioning */
+  /* Inherits .card style from app.vue */
+  padding: 20px; /* Override default card padding if needed */
+  max-width: 800px; /* Limit max width for better readability */
+  margin: 0 auto; /* Center the container */
+  background-color: var(--surface-color); /* Ensure background is set */
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--box-shadow);
+}
+
+/* Use global separator */
+.separator {
+  margin: 20px 0;
+  border: none;
+  border-top: 1px solid var(--border-color);
 }
 
 /* Title Section */
 .title-section {
-  display: flex;
-  flex-direction: column;
-  margin-bottom: 1.5rem;
+  text-align: center;
+  margin-bottom: 20px;
 }
 
 .logo-title {
   display: flex;
   align-items: center;
-  margin-bottom: 0.5rem;
+  justify-content: center;
+  gap: 15px;
+  margin-bottom: 10px;
 }
 
 .app-logo {
   font-size: 3rem;
-  margin-right: 1rem;
-  background-color: var(--hover-bg, #f1f5f9);
-  border-radius: 50%;
-  width: 70px;
-  height: 70px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-.app-logo svg {
-    color: var(--primary-color);
-    width: 0.8em;
-    height: 0.8em;
+  color: var(--primary-color);
 }
 
 .app-title {
   font-size: 2rem;
-  font-weight: bold;
-  color: var(--text-primary, #4a4a4a);
+  font-weight: 700;
+  color: var(--text-primary);
   margin: 0;
-  background: linear-gradient(to right, var(--primary-color, #4f46e5), #a78bfa);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
 }
 
 .version-info {
-  font-size: 0.9rem;
-  color: var(--text-secondary, #666);
-  margin-left: 4.5rem;
-  padding: 0.3rem 0.7rem;
-  background-color: var(--hover-bg, #f5f5f5);
-  border-radius: 20px;
-  display: inline-block;
-  max-width: fit-content;
+  font-size: 1rem;
+  color: var(--text-secondary);
+  font-weight: 500;
 }
 
-.divider {
-  height: 1px;
-  background-color: var(--border-color, #e0e0e0);
-  margin: 1.5rem 0;
-}
-
-/* Update Section - NEW */
+/* Update Buttons Section */
 .update-section {
   display: flex;
-  gap: 1rem;
   justify-content: center;
-  margin: 1rem 0;
+  gap: 20px;
+  margin-bottom: 20px;
+  flex-wrap: wrap; /* Allow buttons to wrap on small screens */
 }
 
-/* Content Section */
+.update-section .btn {
+  /* Inherits global btn styles */
+  padding: 10px 20px; /* Adjust padding */
+}
+.update-section .btn .fa-spinner {
+    margin-right: 8px; /* Space for spinner */
+}
+
+
+/* Content Section (Help & About) */
 .content-section {
   display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-  margin-bottom: 2rem;
+  gap: 20px;
+  margin-bottom: 20px;
+  flex-wrap: wrap; /* Allow sections to stack */
 }
 
-.card {
-  background-color: var(--content-bg, white);
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-  overflow: hidden;
-  border: 1px solid var(--border-color, #e0e0e0);
-  transition: all 0.3s ease;
+.inner-card {
+  /* Inherits global card styles */
+  flex: 1 1 calc(50% - 10px); /* Two columns layout */
+  min-width: 280px; /* Minimum width before stacking */
+  padding: 20px; /* Padding for inner cards */
+   background-color: var(--background-color); /* Use background color for inner cards */
 }
 
-.card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
-}
-
-.card-title {
-  font-size: 1.2rem;
-  padding: 1rem 1.5rem;
-  margin: 0;
-  background-color: var(--hover-bg, #f5f5f5);
-  border-bottom: 1px solid var(--border-color, #e0e0e0);
-  color: var(--text-primary, #4a4a4a);
+.inner-card-title {
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 15px;
   display: flex;
   align-items: center;
-}
-
-.card-icon-fa {
-  margin-right: 0.5rem;
-  font-size: 1.2rem;
-  vertical-align: middle;
+  gap: 10px;
 }
 
 .card-content {
-  padding: 1.5rem;
-  display: flex; /* Use flexbox for the content to stack rows */
-  flex-direction: column; /* Stack rows vertically */
-  gap: 1rem; /* Add space between action rows */
+  /* Padding handled by .inner-card */
 }
 
+/* Help/Docs specific styles */
 .action-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  /* margin-bottom removed, using gap in card-content instead */
+  flex-wrap: wrap; /* Allow wrapping */
+  gap: 10px;
 }
 
-.action-label {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
+.action-label span {
   font-weight: 500;
-  color: var(--text-primary, #4a4a4a);
-  font-size: 1.1rem;
+  color: var(--text-secondary);
 }
 
+.action-row .btn {
+    /* Inherits global btn-outline */
+     padding: 8px 16px;
+}
+
+/* About Software specific styles */
 .description {
-  margin-bottom: 1.5rem;
-  line-height: 1.6;
-  color: var(--text-primary, #4a4a4a);
-  font-size: 1.05rem;
+  margin-bottom: 20px;
+  color: var(--text-primary);
 }
 
-.features {
+.features-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 1rem;
-  margin-bottom: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); /* Responsive grid */
+  gap: 15px;
+  margin-bottom: 20px;
 }
 
 .feature-item {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  text-align: center;
-  padding: 1rem;
-  background-color: var(--hover-bg, #f5f5f5);
-  border-radius: 8px;
-  transition: all 0.2s ease;
+  gap: 8px;
+  color: var(--text-secondary);
 }
 
-.feature-item:hover {
-  background-color: var(--border-color, #e0e0e0);
-}
-
-.feature-icon-fa {
-  font-size: 1.8rem;
-  margin-bottom: 0.5rem;
-  color: var(--primary-color);
+.feature-icon {
+  font-size: 1.1rem;
+  color: var(--primary-color); /* Use primary color for icons */
 }
 
 .feature-text {
-  color: var(--text-primary, #4a4a4a);
-  font-weight: 500;
+  font-size: 0.95rem;
 }
 
 .copyright {
-  font-size: 0.9rem;
-  color: var(--text-secondary, #999);
+  font-size: 0.85rem;
+  color: var(--text-tertiary);
   text-align: center;
-  padding-top: 1rem;
-  border-top: 1px solid var(--border-color, #e0e0e0);
-  margin-top: 1.5rem;
+  margin-top: 20px;
 }
+
 
 /* Footer Section */
 .footer-section {
   display: flex;
-  gap: 1rem;
-  margin-top: 1rem;
   justify-content: center;
-  flex-wrap: wrap;
+  gap: 20px;
+  flex-wrap: wrap; /* Allow buttons to wrap */
 }
 
-/* Buttons */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.7rem 1.2rem;
-  background-color: var(--content-bg, #fff);
-  color: var(--text-primary, #4a4a4a);
-  border: 1px solid var(--border-color, #ddd);
-  border-radius: 8px;
-  font-size: 0.95rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
+.footer-section .btn-text {
+  /* Inherits global btn-text styles */
+  color: var(--text-secondary);
+  padding: 6px 10px; /* Adjust padding */
+}
+.footer-section .btn-text:hover {
+    color: var(--text-primary);
+    background-color: var(--hover-overlay);
 }
 
-.btn:hover {
-  background-color: var(--hover-bg, #f5f5f5);
-  border-color: var(--border-color, #ccc);
-}
-
-.btn-icon-fa {
-    font-size: 1em;
-    vertical-align: middle;
-}
-
-.btn-primary {
-  background-color: var(--primary-color, #4f46e5);
-  color: var(--active-text, white);
-  border: none;
-}
-
-.btn-primary:hover {
-  background-color: var(--primary-hover, #4338ca);
-  transform: translateY(-2px);
-}
-
-.btn-secondary {
-  background-color: var(--secondary-color, #64748b);
-  color: var(--active-text, white);
-  border: none;
-}
-
-.btn-secondary:hover {
-  background-color: var(--secondary-hover, #475569);
-  transform: translateY(-2px);
-}
-
-.btn-link {
-  background-color: transparent;
-  border: none;
-  color: var(--primary-color, #0066cc);
-  padding: 0.5rem 0.8rem;
-}
-
-.btn-link:hover {
-   background-color: rgba(79, 70, 229, 0.05);
-  text-decoration: underline;
-}
-
-/* Modal - NEW */
+/* Modal Styling (Based on global styles) */
 .modal {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.5);
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.6);
   display: flex;
-  align-items: center;
   justify-content: center;
-  z-index: 1000;
+  align-items: center;
+  z-index: 1050;
+  padding: 15px;
+  overflow-y: auto;
 }
 
 .modal-content {
-  background-color: var(--content-bg, white);
-  border-radius: 12px;
-  width: 90%;
-  max-width: 600px;
+  /* Inherits global card styles */
+  width: 100%;
+  max-width: 550px; /* Adjust max width for modals */
   max-height: 90vh;
-  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.2);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  padding: 20px; /* Padding inside the modal content */
 }
 
 .modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem 1.5rem;
-  border-bottom: 1px solid var(--border-color, #e0e0e0);
-  background-color: var(--hover-bg, #f5f5f5);
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 15px;
+  margin-bottom: 15px;
+  flex-shrink: 0;
 }
 
-.modal-header h3 {
+.modal-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text-primary);
   margin: 0;
-  color: var(--text-primary, #333);
 }
 
 .close-button {
-  background: none;
-  border: none;
-  font-size: 1.2rem;
-  cursor: pointer;
-  color: var(--text-secondary, #666);
+  /* Uses global btn-text btn-sm */
+  color: var(--text-secondary);
 }
-
 .close-button:hover {
-  color: var(--text-primary, #333);
+    color: var(--text-primary);
+    background-color: var(--hover-overlay);
 }
 
 .modal-body {
-  padding: 1.5rem;
   overflow-y: auto;
-  max-height: calc(90vh - 70px);
+  flex-grow: 1;
+  margin-bottom: 0; /* No bottom margin if no footer */
 }
 
-/* Version Options - NEW */
+/* Update Modal Specifics */
 .version-option {
-  margin-bottom: 1.5rem;
-  padding: 1rem;
-  border: 1px solid var(--border-color, #e0e0e0);
-  border-radius: 8px;
-  background-color: var(--hover-bg, #f8f9fa);
+    /* Inherits global card style */
+    margin-bottom: 15px;
+    padding: 15px;
+    background-color: var(--background-color); /* Use background for inner card */
+    border: 1px solid var(--border-color); /* Add a border */
+}
+.version-option:last-child {
+    margin-bottom: 0;
 }
 
-.version-option h4 {
-  margin-top: 0;
-  margin-bottom: 0.5rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
+.version-option-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 5px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .version-icon {
-  font-size: 1rem;
+   font-size: 1.2em;
 }
-
 .version-icon.stable {
-  color: #10b981; /* Green */
+    color: var(--secondary-color); /* Green for stable */
 }
-
 .version-icon.test {
-  color: #f59e0b; /* Amber */
+    color: var(--warning-color); /* Yellow/Orange for test */
 }
 
 .version-description {
-  margin-bottom: 1rem;
-  white-space: pre-line;
-  font-size: 0.95rem;
-  color: var(--text-secondary, #666);
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    margin-bottom: 15px;
+}
+.version-option .btn {
+    /* Inherits global btn styles */
+    padding: 8px 16px;
 }
 
-/* Loading Spinner - NEW */
-.loading-spinner {
-  width: 40px;
-  height: 40px;
-  margin: 1rem auto;
-  border: 4px solid var(--hover-bg, #f3f4f6);
-  border-top: 4px solid var(--primary-color, #4f46e5);
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
+/* Version Selector Modal Specifics */
+.os-selector {
+    margin-bottom: 20px;
+    /* Uses global form-group and select */
+}
+.os-selector label {
+    /* Uses global form-label */
+     margin-right: 10px;
+     display: inline-block; /* Keep label next to select */
+}
+.os-selector .select {
+     width: auto; /* Auto width for select */
+     min-width: 120px;
+     padding: 8px 16px;
 }
 
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
 
-/* Version List - NEW */
 .version-list {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  margin-top: 1rem;
+  /* List container */
 }
 
 .version-item {
-  padding: 1rem;
-  border: 1px solid var(--border-color, #e0e0e0);
-  border-radius: 8px;
-  background-color: var(--hover-bg, #f8f9fa);
+   /* Inherits global card style */
+   margin-bottom: 15px;
+   padding: 15px;
+   background-color: var(--background-color); /* Use background */
+   border: 1px solid var(--border-color); /* Add border */
+}
+.version-item:last-child {
+    margin-bottom: 0;
 }
 
 .version-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 0.5rem;
+  gap: 10px;
+  margin-bottom: 5px;
+  flex-wrap: wrap; /* Allow wrap */
+}
+
+.version-item-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .version-tag {
-  font-size: 0.8rem;
-  padding: 0.2rem 0.5rem;
-  border-radius: 20px;
-  background-color: #f59e0b;
-  color: white;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 12px; /* Rounded corners */
+  white-space: nowrap; /* Prevent wrapping */
+  /* Colors inherited from global badge styles via classes like .secondary, .warning */
 }
-
 .version-tag.stable {
-  background-color: #10b981;
+    background-color: var(--secondary-light);
+    color: white;
+}
+.version-tag.warning { /* Used for '测试版' */
+    background-color: var(--warning-light);
+    color: var(--text-primary); /* Use dark text on warning */
 }
 
-/* OS Selector - NEW */
-.os-selector {
-  margin-bottom: 1.5rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
+
+.version-item .version-description {
+   font-size: 0.9rem;
+   color: var(--text-secondary);
+   margin-bottom: 15px;
 }
 
-.os-selector select {
-  padding: 0.5rem;
-  border-radius: 4px;
-  border: 1px solid var(--border-color, #ddd);
-  background-color: var(--content-bg, white);
-  color: var(--text-primary, #333);
-  font-size: 0.95rem;
+.version-item .btn {
+   /* Inherits global btn styles */
+   padding: 8px 16px;
 }
 
-/* For small screens */
-@media (max-width: 600px) {
-  .about-container {
-    padding: 1rem;
-  }
+/* Optional: Loading spinner style if needed inside modal body */
+.modal-body .loading-spinner {
+    width: 30px;
+    height: 30px;
+    margin: 20px auto;
+    border: 3px solid var(--border-color);
+    border-top-color: var(--primary-color);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
 
-  .app-logo {
-    font-size: 2.5rem;
-    width: 55px;
-    height: 55px;
-    margin-right: 0.7rem;
-  }
-  .app-logo svg {
-    width: 0.7em;
-    height: 0.7em;
-  }
+/* Responsive Adjustments */
+@media (max-width: 768px) {
+    .about-container {
+        padding: 15px; /* Reduce padding on small screens */
+    }
+    .title-section {
+        padding-bottom: 15px;
+    }
+    .logo-title {
+        flex-direction: column;
+        gap: 5px;
+    }
+    .app-logo {
+        font-size: 2.5rem;
+    }
+    .app-title {
+        font-size: 1.6rem;
+    }
+    .version-info {
+        font-size: 0.9rem;
+    }
+    .update-section {
+        flex-direction: column; /* Stack buttons */
+        gap: 10px;
+    }
+    .update-section .btn {
+        width: 100%; /* Full width */
+    }
+    .content-section {
+        flex-direction: column; /* Stack inner cards */
+        gap: 15px;
+    }
+     .inner-card {
+        flex-basis: auto; /* Reset flex-basis when stacked */
+        min-width: 0;
+        padding: 15px;
+     }
+    .inner-card-title {
+        font-size: 1.1rem;
+    }
+    .action-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .action-row .btn {
+        width: 100%;
+    }
+     .features-grid {
+        grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); /* Adjust min width for features */
+        gap: 10px;
+     }
+    .feature-item {
+         flex-direction: column; /* Stack icon and text */
+         text-align: center;
+         gap: 4px;
+    }
+     .feature-icon {
+        font-size: 1.4rem;
+     }
+     .feature-text {
+         font-size: 0.85rem;
+     }
+     .footer-section {
+        flex-direction: column; /* Stack footer links */
+        gap: 10px;
+        align-items: center;
+     }
+     .footer-section .btn-text {
+         width: 100%; /* Full width links */
+     }
 
-  .app-title {
-    font-size: 1.5rem;
-  }
-
-  .version-info {
-    margin-left: 3.2rem;
-    font-size: 0.85rem;
-  }
-
-  .divider {
-    margin: 1rem 0;
-  }
-
-  .update-section {
-    flex-direction: column;
-    gap: 0.5rem;
-  }
-
-  .content-section {
-    gap: 1rem;
-    margin-bottom: 1.5rem;
-  }
-
-  .card-title {
-    padding: 0.8rem 1rem;
-    font-size: 1.1rem;
-  }
-
-  .card-icon-fa {
-    font-size: 1.1rem;
-  }
-
-  .card-content {
-    padding: 1rem;
-    gap: 0.8rem; /* Adjust gap for smaller screens */
-  }
-
-  .description {
-    font-size: 1rem;
-    margin-bottom: 1rem;
-  }
-
-  .action-row {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0.8rem; /* Gap between label and button when stacked */
-  }
-
-  .action-label {
-    font-size: 1rem;
-  }
-
-  .btn {
-    width: 100%;
-    justify-content: center;
-    padding: 0.6rem 1rem;
-    font-size: 0.9rem;
-  }
-
-  .btn-icon-fa {
-    font-size: 1em;
-  }
-
-  .features {
-    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-    gap: 0.8rem;
-    margin-bottom: 1rem;
-  }
-
-  .feature-item {
-    padding: 0.8rem;
-  }
-
-  .feature-icon-fa {
-    font-size: 1.5rem;
-  }
-
-  .feature-text {
-    font-size: 0.9rem;
-  }
-
-  .copyright {
-    font-size: 0.85rem;
-    padding-top: 0.8rem;
-    margin-top: 1rem;
-  }
-
-  .footer-section {
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 0.8rem;
-    margin-top: 0.8rem;
-  }
-
-  .btn-link {
-    padding: 0.4rem 0.6rem;
-    font-size: 0.9rem;
-  }
-
-  /* Modal adjustments for small screens */
-  .modal-content {
-    width: 95%;
-    max-height: 95vh;
-  }
-
-  .modal-header {
-    padding: 0.8rem 1rem;
-  }
-
-  .modal-body {
-    padding: 1rem;
-  }
-
-  .version-option {
-    padding: 0.8rem;
-  }
-
-  .version-item {
-    padding: 0.8rem;
-  }
+    /* Modal Adjustments */
+    .modal-content {
+        max-width: 95%;
+        padding: 15px;
+    }
+    .modal-title {
+        font-size: 1.1rem;
+    }
+    .version-option, .version-item {
+        padding: 12px;
+    }
+    .version-option-title, .version-item-title {
+        font-size: 1rem;
+    }
+     .os-selector label {
+         display: block; /* Stack label above select */
+         margin-right: 0;
+         margin-bottom: 5px;
+     }
+     .os-selector .select {
+         width: 100%;
+     }
 }
 </style>

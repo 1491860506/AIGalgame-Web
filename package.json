@@ -20,6 +20,7 @@
     "modern-rembg": "^0.1.2",
     "onnxruntime-web": "^1.18.0",
     "p-limit": "^6.2.0",
+    "uuid": "^11.1.0",
     "vue": "^3.5.13",
     "vue-json-pretty": "^2.4.0",
     "vue-router": "^4.5.0",
@@ -28,6 +29,8 @@
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.2.3",
     "vite": "^6.2.4",
-    "vite-plugin-vue-devtools": "^7.7.2"
+    "vite-plugin-vue-devtools": "^7.7.2",
+    "vitepress": "^1.6.3",
+    "vuepress": "^2.0.0-rc.22"
   }
 }

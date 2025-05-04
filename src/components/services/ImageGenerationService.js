@@ -27,7 +27,7 @@ let imagesDirectory = `${gameDirectory}/${storyTitle}/images`;
 
 // --- Placeholder Functions ---
 async function func1JS(status) {
-    if (status !== 'error' && status !== 'rembg_error' && status !== 'cheak_error') { // Consider non-error failures as triggers too?
+    if (status !== 'error' ) { // Consider non-error failures as triggers too?
         // Logic from python: trigger prompt modification unless it was specific errors
         return 1;
     }

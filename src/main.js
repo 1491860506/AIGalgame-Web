@@ -1,5 +1,4 @@
 // src/main.js
-import './assets/main.css'
 
 import { createApp } from 'vue'
 import Root from './Root.vue'  // 引入 Root.vue
@@ -17,8 +16,8 @@ import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome'
 /* 导入 Solid 图标 */
 import {
   // Icons from Root.vue
-  faHome, faBrain, faMicrophone, faPaintBrush, faMusic, faCamera,
-  faClipboardList, faMagic, faInfoCircle, faSun, faMoon, faDownload, faUpload,
+  faHome, faBrain, faMicrophone, faPaintBrush, faMusic, faCamera,faPlay,faCog,
+  faClipboardList, faMagic, faInfoCircle, faSun, faMoon, faDownload, faUpload,faFileImport,faTrash,faListAlt,faExchangeAlt,faUserAstronaut,
   // Icons from Logs.vue
   faSyncAlt, faTrashAlt, faSearch, faSpinner, faInfo, faExclamationTriangle,
   faExclamationCircle, faDotCircle, faAngleDoubleLeft, faAngleLeft, faAngleRight, faAngleDoubleRight,faChevronDown,faChevronUp,
@@ -27,12 +26,13 @@ import {
   // Icons from FileManager.vue (Solid)
   faFile, faFolder, faLevelUpAlt, faFileLines, faFileCode, faFilm, faPen, faEye, faTimes, faCircleXmark, faCircleCheck,faPenToSquare,
   // Icons from OutlineGenerator.vue (Solid) - Added based on identification
-  faBookOpen, faFileExport, faThumbtack, faScroll, faPlus, faMinus, faFloppyDisk, faBan,
+  faBookOpen, faFileExport, faThumbtack, faScroll, faPlus, faMinus, faFloppyDisk, faBan,faFileAudio,faFileImage,
   // Icons from ManageStory.vue (Solid) - Added based on identification
   faBoxesStacked,
   // Icons from Manage.vue (Solid) - Added based on identification
   faFolderOpen, faChevronRight,
-  faFlask,faAnglesDown
+  faFlask,faAnglesDown,faEyeSlash,faCopy,faCloudDownload,faSliders,faLink,faCheck,faCheckDouble,faSquare,faListUl,faFileCirclePlus,faFolderPlus,
+  faUser,faQuestionCircle,faVial,faKey,faBroom,faCodeBranch,faVolumeUp,faFolderMinus,faVolumeMute,faBookmark,faUserFriends,faMapMarkedAlt,faHandPointer,faUserPlus
 } from '@fortawesome/free-solid-svg-icons'
 
 /* 导入 Brands 图标 */
@@ -44,8 +44,8 @@ import {
 /* 将所有需要使用的图标添加到库中 */
 library.add(
   // Root.vue Icons
-  faHome, faBrain, faMicrophone, faPaintBrush, faMusic, faCamera,
-  faClipboardList, faMagic, faInfoCircle, faSun, faMoon, faDownload, faUpload,faAnglesDown,
+  faHome, faBrain, faMicrophone, faPaintBrush, faMusic, faCamera,faCog,
+  faClipboardList, faMagic, faInfoCircle, faSun, faMoon, faDownload, faUpload,faAnglesDown,faFileImport,faPlay,faListAlt,faExchangeAlt,faUserAstronaut,
   // Logs.vue Icons
   faSyncAlt, faTrashAlt, faSearch, faSpinner, faInfo, faExclamationTriangle,
   faExclamationCircle, faDotCircle, faAngleDoubleLeft, faAngleLeft, faAngleRight, faAngleDoubleRight,faChevronDown,faChevronUp,
@@ -54,12 +54,13 @@ library.add(
   // FileManager.vue Icons (Solid)
   faFile, faFolder, faLevelUpAlt, faFileLines, faFileCode, faFilm, faPen, faEye, faTimes, faCircleXmark, faCircleCheck,faPenToSquare,
   // OutlineGenerator.vue Icons
-  faBookOpen, faFileExport, faThumbtack, faScroll, faPlus, faMinus, faFloppyDisk, faBan, // Solid icons
+  faBookOpen, faFileExport, faThumbtack, faScroll, faPlus, faMinus, faFloppyDisk, faBan,faFileAudio,faFileImage, // Solid icons
   faMarkdown, // Brands icon
   // ManageStory.vue Icons (Solid) - Added based on identification
   faBoxesStacked,
   // Manage.vue Icons (Solid) - Added based on identification
-  faFolderOpen, faChevronRight
+  faFolderOpen, faChevronRight,faEyeSlash,faCopy,faCloudDownload,faSliders,faLink,faCheck,faCheckDouble,faSquare,faTrash,faListUl,faFileCirclePlus,faFolderPlus,
+  faUser,faQuestionCircle,faVial,faKey,faBroom,faCodeBranch,faVolumeUp,faFolderMinus,faVolumeMute,faBookmark,faUserFriends,faMapMarkedAlt,faHandPointer,faUserPlus
 )
 
 // --- Font Awesome End ---

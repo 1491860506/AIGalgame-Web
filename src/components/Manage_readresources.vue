@@ -1,367 +1,368 @@
 <template>
-  <!-- ... (template remains the same as the previous version) ... -->
   <div class="resource-viewer">
     <div v-if="isLoading" class="loading-indicator">
-      <i class="fas fa-spinner fa-spin"></i> 加载资源中...
+      <!-- Use FontAwesomeIcon if globally registered -->
+       <font-awesome-icon :icon="['fas', 'spinner']" spin class="loading-icon-fa large" />
+      <span>加载资源中...</span>
     </div>
 
-<div v-else-if="error" class="error-state">
-  <p>加载资源失败: {{ error }}</p>
-</div>
-
-<div v-else class="resource-content">
-  <!-- 资源列表区域 -->
-  <div class="resource-list-area">
-    <div v-if="!hasResources && !hasMissingResources" class="empty-state">
-         <p>此故事暂无资源文件。</p>
-         <p v-if="!audioDirExists && !imageDirExists && !musicDirExists && !storyDirExists && !characterFileExists">(对应的资源目录或文件不存在)</p>
+    <div v-else-if="error" class="error-state">
+      <font-awesome-icon :icon="['fas', 'exclamation-triangle']" class="error-icon-fa large" />
+      <p>加载资源失败: {{ error }}</p>
     </div>
-    <div v-else>
-        <!-- 语音资源 -->
-        <div v-if="hasAudioResources || hasMissingAudioResources" class="resource-category">
-          <h3>语音 (audio)</h3>
-           <!-- 按故事ID分类的语音 -->
-          <div v-for="(audioItems, storyId) in classifiedAudio.byStory" :key="'audio-story-' + storyId" class="voice-folder">
-              <h4>
-                故事片段 {{ storyId }}
+
+    <!-- New Layout Container -->
+    <div v-else class="resource-layout-container">
+
+      <!-- Resource List Area (Scrollable Left Panel) -->
+      <div class="resource-list-area card">
+        <div v-if="!hasResources && !hasMissingResources" class="empty-state">
+          <font-awesome-icon :icon="['fas', 'box-open']" class="empty-icon-fa medium" />
+          <p>此故事暂无资源文件。</p>
+          <p v-if="!audioDirExists && !imageDirExists && !musicDirExists && !storyDirExists && !characterFileExists" class="text-muted">(对应的资源目录或文件不存在)</p>
+        </div>
+        <div v-else class="resource-list-content">
+          <!-- Voice Resources -->
+          <div v-if="hasAudioResources || hasMissingAudioResources" class="resource-category">
+            <h3 class="category-title"><font-awesome-icon :icon="['fas', 'volume-up']" /> 语音 (audio)</h3>
+            <!-- Story Segment Audio -->
+            <div v-for="(audioItems, storyId) in classifiedAudio.byStory" :key="'audio-story-' + storyId" class="resource-folder">
+              <h4 class="folder-title">
+                <font-awesome-icon :icon="['fas', 'folder']" /> 故事片段 {{ storyId }}
               </h4>
-               <ul class="resource-items">
-                  <li v-for="item in audioItems" :key="item.file.path"
-                      :class="{ selected: selectedResource && selectedResource.path === item.file.path }"
-                      @click="selectResource(item.file, 'audio')">
-                    <i class="fas fa-volume-up resource-icon"></i>
-                    <!-- Display associated text, fallback to filename if text is missing -->
-                    <span>{{ item.text || `[${item.file.name}]` }}</span>
-                  </li>
-                  
-                  <!-- 显示本应存在但不存在的语音 -->
-                  <li v-for="item in getMissingAudioForStory(storyId)" :key="'missing-' + item.id"
-                      class="missing-resource"
-                      @click="handleMissingResourceClick(item)">
-                    <i v-if="isGenerating[`audio-${storyId}-${item.id}`]" class="fas fa-spinner fa-spin resource-icon missing-icon"></i>
-                    <i v-else class="fas fa-volume-up resource-icon missing-icon"></i>
-                    <span>{{ item.text }} <span class="missing-label">[不存在]</span></span>
-                    <button class="btn-complete" @click.stop="regenerateAudio(storyId)" :disabled="isGenerating[`audio-${storyId}-${item.id}`]">
-                      <i v-if="isGenerating[`audio-${storyId}-${item.id}`]" class="fas fa-spinner fa-spin"></i>
-                      <i v-else class="fas fa-plus"></i> 补齐
-                    </button>
-                  </li>
-               </ul>
-          </div>
-          
-          <!-- 缺失的故事片段的语音 -->
-          <template v-for="(items, storyId) in missingAudioByStory" :key="'missing-story-audio-' + storyId" >
-          <div v-if="!classifiedAudio.byStory[storyId]"
-               class="voice-folder missing-folder">
-              <h4>
-                故事片段 {{ storyId }} <span class="missing-section-label">[缺失]</span>
-                <button class="btn-regenerate" @click="regenerateAudio(storyId)" :disabled="isGenerating[`audio-${storyId}`]">
-                  <i v-if="isGenerating[`audio-${storyId}`]" class="fas fa-spinner fa-spin"></i>
-                  <i v-else class="fas fa-sync-alt"></i> 重新生成
-                </button>
-              </h4>
-               <ul class="resource-items">
-                  <li v-for="item in items" :key="'missing-full-' + item.id"
-                      class="missing-resource"
-                      @click="handleMissingResourceClick(item)">
-                    <i v-if="isGenerating[`audio-${storyId}-${item.id}`]" class="fas fa-spinner fa-spin resource-icon missing-icon"></i>
-                    <i v-else class="fas fa-volume-up resource-icon missing-icon"></i>
-                    <span>{{ item.text }} <span class="missing-label">[不存在]</span></span>
-                    <button class="btn-complete" @click.stop="regenerateAudio(storyId)" :disabled="isGenerating[`audio-${storyId}-${item.id}`]">
-                      <i v-if="isGenerating[`audio-${storyId}-${item.id}`]" class="fas fa-spinner fa-spin"></i>
-                      <i v-else class="fas fa-plus"></i> 补齐
-                    </button>
-                  </li>
-               </ul>
-          </div>
-        </template>
-          
-          <!-- 未分类的语音 -->
-           <div v-if="classifiedAudio.uncategorized.length > 0" class="voice-folder">
-             <h4>其他语音 (路径或关联错误)</h4>
+              <ul class="resource-items">
+                <li v-for="item in audioItems" :key="item.file.path"
+                    :class="['resource-item', { selected: selectedResource && selectedResource.path === item.file.path }]"
+                    @click="selectResource(item.file, 'audio')"
+                    :title="`路径: ${item.file.path}`">
+                  <font-awesome-icon :icon="['fas', 'volume-up']" class="resource-icon audio-icon" />
+                  <span class="item-label">{{ item.text || `[${item.file.name}]` }}</span>
+                </li>
+                <!-- Missing Audio -->
+                <li v-for="item in getMissingAudioForStory(storyId)" :key="'missing-' + item.id"
+                    class="resource-item missing-resource"
+                    @click="handleMissingResourceClick(item)">
+                  <font-awesome-icon v-if="isGenerating[`audio-${storyId}-${item.id}`]" :icon="['fas', 'spinner']" spin class="resource-icon missing-icon generating" />
+                  <font-awesome-icon v-else :icon="['fas', 'volume-mute']" class="resource-icon missing-icon" />
+                  <span class="item-label">{{ item.text }} <span class="missing-tag">[缺失]</span></span>
+                  <button class="btn btn-warning btn-xs btn-action" @click.stop="regenerateAudio(storyId)" :disabled="isGenerating[`audio-${storyId}-${item.id}`]">
+                    <font-awesome-icon v-if="isGenerating[`audio-${storyId}-${item.id}`]" :icon="['fas', 'spinner']" spin />
+                    <font-awesome-icon v-else :icon="['fas', 'plus']" /> 补齐
+                  </button>
+                </li>
+              </ul>
+            </div>
+            <!-- Missing Story Segment Audio -->
+             <template v-for="(items, storyId) in missingAudioByStory" :key="'missing-story-audio-' + storyId">
+                 <div v-if="!classifiedAudio.byStory[storyId]" class="resource-folder missing-folder">
+                    <h4 class="folder-title missing">
+                       <font-awesome-icon :icon="['fas', 'folder-minus']" /> 故事片段 {{ storyId }} <span class="missing-tag">[缺失]</span>
+                       <button class="btn btn-danger btn-xs btn-action" @click="regenerateAudio(storyId)" :disabled="isGenerating[`audio-${storyId}`]">
+                         <font-awesome-icon v-if="isGenerating[`audio-${storyId}`]" :icon="['fas', 'spinner']" spin />
+                         <font-awesome-icon v-else :icon="['fas', 'sync-alt']" /> 重生成
+                       </button>
+                    </h4>
+                    <ul class="resource-items">
+                       <li v-for="item in items" :key="'missing-full-' + item.id" class="resource-item missing-resource" @click="handleMissingResourceClick(item)">
+                          <font-awesome-icon v-if="isGenerating[`audio-${storyId}-${item.id}`]" :icon="['fas', 'spinner']" spin class="resource-icon missing-icon generating" />
+                          <font-awesome-icon v-else :icon="['fas', 'volume-mute']" class="resource-icon missing-icon" />
+                          <span class="item-label">{{ item.text }} <span class="missing-tag">[缺失]</span></span>
+                         <button class="btn btn-warning btn-xs btn-action" @click.stop="regenerateAudio(storyId)" :disabled="isGenerating[`audio-${storyId}-${item.id}`]">
+                            <font-awesome-icon v-if="isGenerating[`audio-${storyId}-${item.id}`]" :icon="['fas', 'spinner']" spin />
+                            <font-awesome-icon v-else :icon="['fas', 'plus']" /> 补齐
+                         </button>
+                       </li>
+                    </ul>
+                 </div>
+            </template>
+            <!-- Uncategorized Audio -->
+            <div v-if="classifiedAudio.uncategorized.length > 0" class="resource-folder">
+              <h4 class="folder-title"><font-awesome-icon :icon="['fas', 'question-circle']" /> 其他语音</h4>
               <ul class="resource-items">
                 <li v-for="file in classifiedAudio.uncategorized" :key="file.path"
-                     :class="{ selected: selectedResource && selectedResource.path === file.path }"
-                     @click="selectResource(file, 'audio')">
-                   <i class="fas fa-volume-up resource-icon"></i>
-                   <span>{{ file.name }}</span>
+                     :class="['resource-item', { selected: selectedResource && selectedResource.path === file.path }]"
+                     @click="selectResource(file, 'audio')" :title="`路径: ${file.path}`">
+                   <font-awesome-icon :icon="['fas', 'volume-up']" class="resource-icon audio-icon" />
+                   <span class="item-label">{{ file.name }}</span>
                  </li>
               </ul>
-           </div>
-        </div>
+            </div>
+          </div>
 
-        <!-- 图片资源 -->
-        <div v-if="hasImageResources || hasMissingImageResources" class="resource-category">
-          <h3>图片 (images)</h3>
-
-           <!-- 标题图片 -->
-           <div v-if="classifiedImages.title.length > 0 || missingTitleImage" class="voice-folder">
-               <h4>
-                 封面图片
-                 <button class="btn-regenerate" @click="regenerateTitleImage()" :disabled="isGenerating['image-title']">
-                   <i v-if="isGenerating['image-title']" class="fas fa-spinner fa-spin"></i>
-                   <i v-else class="fas fa-sync-alt"></i> 重新生成
+          <!-- Image Resources -->
+          <div v-if="hasImageResources || hasMissingImageResources" class="resource-category">
+            <h3 class="category-title"><font-awesome-icon :icon="['fas', 'image']" /> 图片 (images)</h3>
+            <!-- Title Image -->
+            <div v-if="classifiedImages.title.length > 0 || missingTitleImage" class="resource-folder">
+              <h4 class="folder-title">
+                <font-awesome-icon :icon="['fas', 'bookmark']" /> 封面图片
+                <button class="btn btn-secondary btn-xs btn-action" @click="regenerateTitleImage()" :disabled="isGenerating['image-title']">
+                  <font-awesome-icon v-if="isGenerating['image-title']" :icon="['fas', 'spinner']" spin />
+                  <font-awesome-icon v-else :icon="['fas', 'sync-alt']" /> 重生成
+                </button>
+              </h4>
+              <ul class="resource-items">
+                <li v-for="file in classifiedImages.title" :key="file.path"
+                    :class="['resource-item', { selected: selectedResource && selectedResource.path === file.path }]"
+                    @click="selectResource(file, 'image')" :title="`路径: ${file.path}`">
+                  <font-awesome-icon :icon="['fas', 'image']" class="resource-icon image-icon" />
+                  <span class="item-label">{{ file.name }}</span>
+                </li>
+                <li v-if="missingTitleImage" class="resource-item missing-resource" @click="handleMissingResourceClick(missingTitleImage)">
+                  <font-awesome-icon v-if="isGenerating['image-title']" :icon="['fas', 'spinner']" spin class="resource-icon missing-icon generating" />
+                   <font-awesome-icon v-else :icon="['fas', 'image']" class="resource-icon missing-icon faded" />
+                  <span class="item-label">title.png <span class="missing-tag">[缺失]</span></span>
+                  <button class="btn btn-warning btn-xs btn-action" @click.stop="regenerateTitleImage()" :disabled="isGenerating['image-title']">
+                     <font-awesome-icon v-if="isGenerating['image-title']" :icon="['fas', 'spinner']" spin />
+                     <font-awesome-icon v-else :icon="['fas', 'plus']" /> 补齐
+                  </button>
+                </li>
+              </ul>
+            </div>
+            <!-- Character Images -->
+            <div v-if="classifiedImages.characters.length > 0 || missingCharacterImages.length > 0" class="resource-folder">
+               <h4 class="folder-title">
+                 <font-awesome-icon :icon="['fas', 'user-friends']" /> 人物
+                 <button class="btn btn-secondary btn-xs btn-action" @click="showCharacterSelection(true)" :disabled="isGenerating['image-characters']">
+                   <font-awesome-icon v-if="isGenerating['image-characters']" :icon="['fas', 'spinner']" spin />
+                   <font-awesome-icon v-else :icon="['fas', 'sync-alt']" /> 重生成
                  </button>
                </h4>
                <ul class="resource-items">
-                   <li v-for="file in classifiedImages.title" :key="file.path"
-                       :class="{ selected: selectedResource && selectedResource.path === file.path }"
-                       @click="selectResource(file, 'image')">
-                     <i class="fas fa-image resource-icon"></i>
-                     <span>{{ file.name }}</span>
-                   </li>
-                   
-                   <!-- 显示缺失的标题图片 -->
-                   <li v-if="missingTitleImage" 
-                       class="missing-resource"
-                       @click="handleMissingResourceClick(missingTitleImage)">
-                     <i v-if="isGenerating['image-title']" class="fas fa-spinner fa-spin resource-icon missing-icon"></i>
-                     <i v-else class="fas fa-image resource-icon missing-icon"></i>
-                     <span>title.png <span class="missing-label">[不存在]</span></span>
-                     <button class="btn-complete" @click.stop="regenerateTitleImage()" :disabled="isGenerating['image-title']">
-                       <i v-if="isGenerating['image-title']" class="fas fa-spinner fa-spin"></i>
-                       <i v-else class="fas fa-plus"></i> 补齐
+                 <li v-for="file in classifiedImages.characters" :key="file.path" :class="['resource-item', { selected: selectedResource && selectedResource.path === file.path }]" @click="selectResource(file, 'image')" :title="`路径: ${file.path}`">
+                    <font-awesome-icon :icon="['fas', 'image']" class="resource-icon image-icon" />
+                    <span class="item-label">{{ file.name }}</span>
+                 </li>
+                 <li v-for="item in missingCharacterImages" :key="'missing-char-' + item.name" class="resource-item missing-resource" @click="handleMissingResourceClick(item)">
+                     <font-awesome-icon v-if="isGenerating[`image-character-${item.name}`]" :icon="['fas', 'spinner']" spin class="resource-icon missing-icon generating" />
+                     <font-awesome-icon v-else :icon="['fas', 'image']" class="resource-icon missing-icon faded" />
+                     <span class="item-label">{{ item.name }}.png <span class="missing-tag">[缺失]</span></span>
+                     <button class="btn btn-warning btn-xs btn-action" @click.stop="showCharacterSelection(false)" :disabled="isGenerating['image-characters'] || isAnyCharacterGenerating">
+                         <font-awesome-icon v-if="isGenerating['image-characters'] || isAnyCharacterGenerating" :icon="['fas', 'spinner']" spin />
+                         <font-awesome-icon v-else :icon="['fas', 'plus']" /> 补齐
                      </button>
-                   </li>
+                 </li>
                </ul>
-           </div>
-
-           <!-- 人物图片 -->
-           <div v-if="classifiedImages.characters.length > 0 || missingCharacterImages.length > 0" class="voice-folder">
-               <h4>
-                 人物
-                 <button class="btn-regenerate" @click="showCharacterSelection(true)" :disabled="isGenerating['image-characters']">
-                   <i v-if="isGenerating['image-characters']" class="fas fa-spinner fa-spin"></i>
-                   <i v-else class="fas fa-sync-alt"></i> 重新生成
-                 </button>
-               </h4>
-               <ul class="resource-items">
-                   <li v-for="file in classifiedImages.characters" :key="file.path"
-                       :class="{ selected: selectedResource && selectedResource.path === file.path }"
-                       @click="selectResource(file, 'image')">
-                     <i class="fas fa-image resource-icon"></i>
-                     <span>{{ file.name }}</span>
-                   </li>
-                   
-                   <!-- 显示缺失的人物图片 -->
-                   <li v-for="item in missingCharacterImages" :key="'missing-char-' + item.name"
-                       class="missing-resource"
-                       @click="handleMissingResourceClick(item)">
-                     <i v-if="isGenerating[`image-character-${item.name}`]" class="fas fa-spinner fa-spin resource-icon missing-icon"></i>
-                     <i v-else class="fas fa-image resource-icon missing-icon"></i>
-                     <span>{{ item.name }}.png <span class="missing-label">[不存在]</span></span>
-                     <button class="btn-complete" @click.stop="showCharacterSelection(false)" :disabled="isGenerating['image-characters'] || isAnyCharacterGenerating">
-                       <i v-if="isGenerating['image-characters'] || isAnyCharacterGenerating" class="fas fa-spinner fa-spin"></i>
-                       <i v-else class="fas fa-plus"></i> 补齐
-                     </button>
-                   </li>
-               </ul>
-           </div>
-           <!-- 背景图片按故事ID分类 -->
-           <div v-if="Object.keys(classifiedImages.backgrounds.byStory).length > 0 || Object.keys(missingBackgroundsByStory).length > 0" class="voice-folder">
-                <h4>背景图 (按故事片段)</h4>
-                 <div v-for="(bgFiles, storyId) in classifiedImages.backgrounds.byStory" :key="'bg-story-' + storyId" class="voice-folder sub-folder">
-                      <h5>
-                        故事片段 {{ storyId }}
-                        <button class="btn-regenerate" @click="showBackgroundSelection(storyId, true)" :disabled="isGenerating[`image-bg-${storyId}`]">
-                          <i v-if="isGenerating[`image-bg-${storyId}`]" class="fas fa-spinner fa-spin"></i>
-                          <i v-else class="fas fa-sync-alt"></i> 重新生成
-                        </button>
-                      </h5>
-                      <ul class="resource-items">
-                         <li v-for="file in bgFiles" :key="file.path"
-                             :class="{ selected: selectedResource && selectedResource.path === file.path }"
-                             @click="selectResource(file, 'image')">
-                           <i class="fas fa-image resource-icon"></i>
-                           <span>{{ file.name }}</span>
+            </div>
+             <!-- Background Images -->
+            <div v-if="Object.keys(classifiedImages.backgrounds.byStory).length > 0 || Object.keys(missingBackgroundsByStory).length > 0" class="resource-folder">
+                 <h4 class="folder-title"><font-awesome-icon :icon="['fas', 'map-marked-alt']" /> 背景图 (按故事片段)</h4>
+                 <!-- Existing Backgrounds -->
+                 <div v-for="(bgFiles, storyId) in classifiedImages.backgrounds.byStory" :key="'bg-story-' + storyId" class="resource-folder sub-folder">
+                     <h5 class="sub-folder-title">
+                         <font-awesome-icon :icon="['fas', 'folder-open']" /> 故事片段 {{ storyId }}
+                         <button class="btn btn-secondary btn-xs btn-action" @click="showBackgroundSelection(storyId, true)" :disabled="isGenerating[`image-bg-${storyId}`]">
+                             <font-awesome-icon v-if="isGenerating[`image-bg-${storyId}`]" :icon="['fas', 'spinner']" spin />
+                             <font-awesome-icon v-else :icon="['fas', 'sync-alt']" /> 重生成
+                         </button>
+                     </h5>
+                     <ul class="resource-items">
+                         <li v-for="file in bgFiles" :key="file.path" :class="['resource-item', { selected: selectedResource && selectedResource.path === file.path }]" @click="selectResource(file, 'image')" :title="`路径: ${file.path}`">
+                            <font-awesome-icon :icon="['fas', 'image']" class="resource-icon image-icon" />
+                            <span class="item-label">{{ file.name }}</span>
                          </li>
-                         
-                         <!-- 显示该故事片段缺失的背景图 -->
-                         <li v-for="item in getMissingBackgroundsForStory(storyId)" :key="'missing-bg-' + storyId + '-' + item.name"
-                             class="missing-resource"
-                             @click="handleMissingResourceClick(item)">
-                           <i v-if="isGenerating[`image-bg-${storyId}-${item.name}`]" class="fas fa-spinner fa-spin resource-icon missing-icon"></i>
-                           <i v-else class="fas fa-image resource-icon missing-icon"></i>
-                           <span>{{ item.name }}.png <span class="missing-label">[不存在]</span></span>
-                           <button class="btn-complete" @click.stop="showBackgroundSelection(storyId, false)" :disabled="isGenerating[`image-bg-${storyId}`]">
-                            <i v-if="isGenerating[`image-bg-${storyId}`]" class="fas fa-spinner fa-spin"></i>
-                            <i v-else class="fas fa-plus"></i> 补齐
-                          </button>
+                         <!-- Missing within existing story ID -->
+                         <li v-for="item in getMissingBackgroundsForStory(storyId)" :key="'missing-bg-' + storyId + '-' + item.name" class="resource-item missing-resource" @click="handleMissingResourceClick(item)">
+                             <font-awesome-icon v-if="isGenerating[`image-bg-${storyId}-${item.name}`]" :icon="['fas', 'spinner']" spin class="resource-icon missing-icon generating" />
+                             <font-awesome-icon v-else :icon="['fas', 'image']" class="resource-icon missing-icon faded" />
+                             <span class="item-label">{{ item.name }}.png <span class="missing-tag">[缺失]</span></span>
+                             <button class="btn btn-warning btn-xs btn-action" @click.stop="showBackgroundSelection(storyId, false)" :disabled="isGenerating[`image-bg-${storyId}`]">
+                                 <font-awesome-icon v-if="isGenerating[`image-bg-${storyId}`]" :icon="['fas', 'spinner']" spin />
+                                 <font-awesome-icon v-else :icon="['fas', 'plus']" /> 补齐
+                             </button>
                          </li>
-                      </ul>
+                     </ul>
                  </div>
-                 
-                <!-- 显示缺失故事片段的背景图 -->
-                <template v-for="(items, storyId) in missingBackgroundsByStory" :key="'missing-bg-story-' + storyId" >
-                    <div v-if="!classifiedImages.backgrounds.byStory[storyId]"
-                     class="voice-folder sub-folder missing-folder">
-                      <h5>
-                        故事片段 {{ storyId }} <span class="missing-section-label">[缺失]</span>
-                        <button class="btn-regenerate" @click="showBackgroundSelection(storyId, true)" :disabled="isGenerating[`image-bg-${storyId}`]">
-                          <i v-if="isGenerating[`image-bg-${storyId}`]" class="fas fa-spinner fa-spin"></i>
-                          <i v-else class="fas fa-sync-alt"></i> 重新生成
-                        </button>
-                      </h5>
-                      <ul class="resource-items">
-                         <li v-for="item in items" :key="'missing-bg-full-' + storyId + '-' + item.name"
-                             class="missing-resource"
-                             @click="handleMissingResourceClick(item)">
-                           <i v-if="isGenerating[`image-bg-${storyId}-${item.name}`]" class="fas fa-spinner fa-spin resource-icon missing-icon"></i>
-                           <i v-else class="fas fa-image resource-icon missing-icon"></i>
-                           <span>{{ item.name }}.png <span class="missing-label">[不存在]</span></span>
-                           <button class="btn-complete" @click.stop="showBackgroundSelection(storyId, false)" :disabled="isGenerating[`image-bg-${storyId}`]">
-                             <i v-if="isGenerating[`image-bg-${storyId}`]" class="fas fa-spinner fa-spin"></i>
-                             <i v-else class="fas fa-plus"></i> 补齐
-                           </button>
-                         </li>
-                      </ul>
-                 </div>
-              </template>
-           </div>
-           <!-- 未分类背景图片 -->
-           <div v-if="classifiedImages.backgrounds.uncategorized.length > 0" class="voice-folder">
-                <h4>背景图 (未关联场景)</h4>
-               <ul class="resource-items">
-                   <li v-for="file in classifiedImages.backgrounds.uncategorized" :key="file.path"
-                       :class="{ selected: selectedResource && selectedResource.path === file.path }"
-                       @click="selectResource(file, 'image')">
-                     <i class="fas fa-image resource-icon"></i>
-                     <span>{{ file.name }}</span>
-                   </li>
-               </ul>
-           </div>
-        </div>
+                 <!-- Missing Backgrounds (entire story ID section missing) -->
+                 <template v-for="(items, storyId) in missingBackgroundsByStory" :key="'missing-bg-story-' + storyId">
+                     <div v-if="!classifiedImages.backgrounds.byStory[storyId]" class="resource-folder sub-folder missing-folder">
+                         <h5 class="sub-folder-title missing">
+                            <font-awesome-icon :icon="['fas', 'folder-minus']" /> 故事片段 {{ storyId }} <span class="missing-tag">[缺失]</span>
+                            <button class="btn btn-danger btn-xs btn-action" @click="showBackgroundSelection(storyId, true)" :disabled="isGenerating[`image-bg-${storyId}`]">
+                               <font-awesome-icon v-if="isGenerating[`image-bg-${storyId}`]" :icon="['fas', 'spinner']" spin />
+                               <font-awesome-icon v-else :icon="['fas', 'sync-alt']" /> 重生成
+                            </button>
+                         </h5>
+                         <ul class="resource-items">
+                            <li v-for="item in items" :key="'missing-bg-full-' + storyId + '-' + item.name" class="resource-item missing-resource" @click="handleMissingResourceClick(item)">
+                               <font-awesome-icon v-if="isGenerating[`image-bg-${storyId}-${item.name}`]" :icon="['fas', 'spinner']" spin class="resource-icon missing-icon generating" />
+                               <font-awesome-icon v-else :icon="['fas', 'image']" class="resource-icon missing-icon faded" />
+                               <span class="item-label">{{ item.name }}.png <span class="missing-tag">[缺失]</span></span>
+                               <button class="btn btn-warning btn-xs btn-action" @click.stop="showBackgroundSelection(storyId, false)" :disabled="isGenerating[`image-bg-${storyId}`]">
+                                   <font-awesome-icon v-if="isGenerating[`image-bg-${storyId}`]" :icon="['fas', 'spinner']" spin />
+                                   <font-awesome-icon v-else :icon="['fas', 'plus']" /> 补齐
+                               </button>
+                            </li>
+                         </ul>
+                     </div>
+                 </template>
+            </div>
+             <!-- Uncategorized Backgrounds -->
+            <div v-if="classifiedImages.backgrounds.uncategorized.length > 0" class="resource-folder">
+                 <h4 class="folder-title"><font-awesome-icon :icon="['fas', 'question-circle']" /> 其他背景图</h4>
+                 <ul class="resource-items">
+                    <li v-for="file in classifiedImages.backgrounds.uncategorized" :key="file.path" :class="['resource-item', { selected: selectedResource && selectedResource.path === file.path }]" @click="selectResource(file, 'image')" :title="`路径: ${file.path}`">
+                        <font-awesome-icon :icon="['fas', 'image']" class="resource-icon image-icon" />
+                        <span class="item-label">{{ file.name }}</span>
+                    </li>
+                 </ul>
+            </div>
+          </div>
 
-        <!-- 音乐资源 -->
-        <div v-if="hasMusicResources || missingMusicFiles.length > 0" class="resource-category">
-          <h3>
-            音乐 (music)
-            <button class="btn-regenerate" @click="regenerateMusic()" :disabled="isGenerating['music']">
-              <i v-if="isGenerating['music']" class="fas fa-spinner fa-spin"></i>
-              <i v-else class="fas fa-sync-alt"></i> 重新生成
-            </button>
-          </h3>
-          <ul class="resource-items">
-            <li v-for="file in resourceCategories.music" :key="file.path"
-                :class="{ selected: selectedResource && selectedResource.path === file.path }"
-                @click="selectResource(file, 'audio')">
-              <i class="fas fa-music resource-icon"></i>
-              <span>{{ file.name }}</span>
-            </li>
-            
-            <!-- 显示缺失的音乐文件 -->
-            <li v-for="item in missingMusicFiles" :key="'missing-music-' + item.name"
-                class="missing-resource"
-                @click="handleMissingResourceClick(item)">
-              <i v-if="isGenerating['music']" class="fas fa-spinner fa-spin resource-icon missing-icon"></i>
-              <i v-else class="fas fa-music resource-icon missing-icon"></i>
-              <span>{{ item.name }} <span class="missing-label">[不存在]</span></span>
-              <button class="btn-complete" @click.stop="regenerateMusic()" :disabled="isGenerating['music']">
-                <i v-if="isGenerating['music']" class="fas fa-spinner fa-spin"></i>
-                <i v-else class="fas fa-plus"></i> 补齐
+          <!-- Music Resources -->
+          <div v-if="hasMusicResources || missingMusicFiles.length > 0" class="resource-category">
+            <h3 class="category-title">
+              <font-awesome-icon :icon="['fas', 'music']" /> 音乐 (music)
+              <button class="btn btn-secondary btn-xs btn-action" @click="regenerateMusic()" :disabled="isGenerating['music']">
+                <font-awesome-icon v-if="isGenerating['music']" :icon="['fas', 'spinner']" spin />
+                <font-awesome-icon v-else :icon="['fas', 'sync-alt']" /> 重生成
               </button>
-            </li>
-          </ul>
-        </div>
-    </div>
-  </div>
-
-  <!-- 资源预览区域 -->
-  <div class="resource-preview-area">
-    <div v-if="!selectedResource" class="preview-placeholder">
-      选择一个资源进行预览
-    </div>
-    <div v-else class="preview-content">
-      <h4>预览: {{ selectedResource.name }}</h4>
-      <div class="preview-container">
-        <img v-if="selectedResource.type === 'image' && previewUrl && !loadingPreview && !previewError" :src="previewUrl" alt="预览图片" class="preview-image">
-        <!-- 音频预览 -->
-        <div v-else-if="selectedResource.type === 'audio' && previewUrl" class="audio-preview">
-          <audio ref="audioPlayer" controls :src="previewUrl"
-                 @error="handleAudioError" @ended="handleAudioEnded">
-                 您的浏览器不支持 Audio 标签，请尝试更新浏览器。
-          </audio>
-        </div>
-         <!-- 加载指示器 -->
-         <div v-if="loadingPreview" class="loading-indicator small">
-             <i class="fas fa-spinner fa-spin"></i> 加载预览中...
-         </div>
-          <!-- 错误状态 -->
-          <div v-if="previewError && !loadingPreview" class="error-state small">
-             加载或播放预览失败
-         </div>
-          <!-- 如果选中了但没有预览内容 -->
-         <div v-if="selectedResource && !previewUrl && !loadingPreview && !previewError" class="preview-placeholder small">
-            此文件类型不支持预览
-         </div>
-      </div>
-    </div>
-  </div>
-</div>
-
-  </div>
-  
-  <!-- 角色选择对话框 -->
-  <div v-if="showCharacterDialog" class="modal-overlay">
-    <div class="modal-dialog">
-      <div class="modal-header">
-        <h3>选择需要生成的人物</h3>
-        <button class="close-btn" @click="closeCharacterDialog">&times;</button>
-      </div>
-      <div class="modal-body">
-        <div class="selection-options">
-          <label class="select-all-container">
-            <input type="checkbox" v-model="selectAllCharacters" @change="toggleAllCharacters">
-            <span>全选</span>
-          </label>
-          <div class="character-options">
-            <label v-for="character in characterSelectionList" :key="character.name">
-              <input type="checkbox" v-model="character.selected">
-              <span>{{ character.name }}</span>
-            </label>
+            </h3>
+            <ul class="resource-items">
+              <li v-for="file in resourceCategories.music" :key="file.path"
+                  :class="['resource-item', { selected: selectedResource && selectedResource.path === file.path }]"
+                  @click="selectResource(file, 'audio')" :title="`路径: ${file.path}`">
+                <font-awesome-icon :icon="['fas', 'music']" class="resource-icon music-icon" />
+                <span class="item-label">{{ file.name }}</span>
+              </li>
+              <li v-for="item in missingMusicFiles" :key="'missing-music-' + item.name"
+                  class="resource-item missing-resource"
+                  @click="handleMissingResourceClick(item)">
+                <font-awesome-icon v-if="isGenerating['music']" :icon="['fas', 'spinner']" spin class="resource-icon missing-icon generating" />
+                 <font-awesome-icon v-else :icon="['fas', 'music']" class="resource-icon missing-icon faded" />
+                <span class="item-label">{{ item.name }} <span class="missing-tag">[缺失]</span></span>
+                <button class="btn btn-warning btn-xs btn-action" @click.stop="regenerateMusic()" :disabled="isGenerating['music']">
+                   <font-awesome-icon v-if="isGenerating['music']" :icon="['fas', 'spinner']" spin />
+                   <font-awesome-icon v-else :icon="['fas', 'plus']" /> 补齐
+                </button>
+              </li>
+            </ul>
           </div>
         </div>
       </div>
-      <div class="modal-footer">
-        <button class="btn-cancel" @click="closeCharacterDialog">取消</button>
-        <button class="btn-confirm" @click="confirmCharacterSelection" :disabled="!hasSelectedCharacters">
-          确认
-        </button>
-      </div>
-    </div>
-  </div>
-  
-  <!-- 背景选择对话框 -->
-  <div v-if="showBackgroundDialog" class="modal-overlay">
-    <div class="modal-dialog">
-      <div class="modal-header">
-        <h3>选择需要生成的背景 (故事片段 {{ currentStoryId }})</h3>
-        <button class="close-btn" @click="closeBackgroundDialog">&times;</button>
-      </div>
-      <div class="modal-body">
-        <div class="selection-options">
-          <label class="select-all-container">
-            <input type="checkbox" v-model="selectAllBackgrounds" @change="toggleAllBackgrounds">
-            <span>全选</span>
-          </label>
-          <div class="character-options">
-            <label v-for="place in backgroundSelectionList" :key="place.name">
-              <input type="checkbox" v-model="place.selected">
-              <span>{{ place.name }}</span>
-            </label>
+
+      <!-- Resource Preview Area (Right Panel) -->
+      <div class="resource-preview-area card">
+        <div v-if="!selectedResource" class="preview-placeholder">
+           <font-awesome-icon :icon="['fas', 'hand-pointer']" class="placeholder-icon" />
+           选择左侧资源进行预览
+        </div>
+        <div v-else class="preview-content">
+          <h4 class="preview-title">预览: {{ selectedResource.name }}</h4>
+          <div class="preview-container">
+            <img v-if="selectedResource.type === 'image' && previewUrl && !loadingPreview && !previewError" :src="previewUrl" alt="预览图片" class="preview-image">
+            <div v-else-if="selectedResource.type === 'audio' && previewUrl" class="audio-preview">
+              <audio ref="audioPlayer" controls :src="previewUrl"
+                     @error="handleAudioError" @ended="handleAudioEnded" preload="metadata">
+                     您的浏览器不支持 Audio 标签。
+              </audio>
+            </div>
+            <div v-if="loadingPreview" class="loading-indicator small">
+                 <font-awesome-icon :icon="['fas', 'spinner']" spin /> 加载预览中...
+            </div>
+            <div v-if="previewError && !loadingPreview" class="error-state small">
+                 加载或播放预览失败
+            </div>
+            <div v-if="selectedResource && !previewUrl && !loadingPreview && !previewError && !selectedResource.isMissing" class="preview-placeholder small">
+                此文件类型不支持预览
+            </div>
+             <div v-if="selectedResource && selectedResource.isMissing" class="preview-placeholder small">
+                 资源文件不存在，无法预览
+            </div>
           </div>
         </div>
       </div>
-      <div class="modal-footer">
-        <button class="btn-cancel" @click="closeBackgroundDialog">取消</button>
-        <button class="btn-confirm" @click="confirmBackgroundSelection" :disabled="!hasSelectedBackgrounds">
-          确认
-        </button>
-      </div>
+
+    </div><!-- End Layout Container -->
+
+    <!-- Character Selection Dialog -->
+    <div v-if="showCharacterDialog" class="modal">
+        <div class="modal-content selection-dialog card">
+           <div class="modal-header">
+             <h3 class="modal-title"><font-awesome-icon :icon="['fas', 'user-friends']" /> 选择需要生成的人物图片</h3>
+             <button class="close-btn btn btn-text btn-sm" @click="closeCharacterDialog" title="关闭">
+                <font-awesome-icon :icon="['fas', 'times']" />
+             </button>
+           </div>
+           <div class="modal-body">
+             <div class="selection-options">
+               <label class="select-all-container option-label-item">
+                 <div class="option-text">全选/取消全选</div>
+                 <div class="switch">
+                   <input type="checkbox" id="select-all-chars" v-model="selectAllCharacters" @change="toggleAllCharacters" class="switch-input">
+                   <label for="select-all-chars" class="switch-slider"></label>
+                 </div>
+               </label>
+               <hr class="separator thin-separator">
+               <div class="options-grid">
+                 <label v-for="character in characterSelectionList" :key="character.name" :for="`char-${character.name}`" class="option-label-item">
+                   <div class="option-text">{{ character.name }}</div>
+                   <div class="switch">
+                     <input type="checkbox" :id="`char-${character.name}`" v-model="character.selected" class="switch-input">
+                     <label :for="`char-${character.name}`" class="switch-slider"></label>
+                   </div>
+                 </label>
+               </div>
+             </div>
+           </div>
+           <div class="modal-footer">
+             <button class="btn btn-secondary" @click="closeCharacterDialog">取消</button>
+             <button class="btn btn-primary" @click="confirmCharacterSelection" :disabled="!hasSelectedCharacters || isGenerating['image-characters'] || isAnyCharacterGenerating">
+                 <font-awesome-icon v-if="isGenerating['image-characters'] || isAnyCharacterGenerating" :icon="['fas', 'spinner']" spin />
+                 <span v-else><font-awesome-icon :icon="['fas', 'check']" /> 确认生成</span>
+             </button>
+           </div>
+        </div>
     </div>
+
+    <!-- Background Selection Dialog -->
+     <div v-if="showBackgroundDialog" class="modal">
+        <div class="modal-content selection-dialog card">
+           <div class="modal-header">
+             <h3 class="modal-title"><font-awesome-icon :icon="['fas', 'map-marked-alt']" /> 选择背景图片 (片段 {{ currentStoryId }})</h3>
+             <button class="close-btn btn btn-text btn-sm" @click="closeBackgroundDialog" title="关闭">
+                <font-awesome-icon :icon="['fas', 'times']" />
+             </button>
+           </div>
+           <div class="modal-body">
+             <div class="selection-options">
+               <label class="select-all-container option-label-item">
+                 <div class="option-text">全选/取消全选</div>
+                 <div class="switch">
+                   <input type="checkbox" id="select-all-bgs" v-model="selectAllBackgrounds" @change="toggleAllBackgrounds" class="switch-input">
+                   <label for="select-all-bgs" class="switch-slider"></label>
+                 </div>
+               </label>
+                <hr class="separator thin-separator">
+               <div class="options-grid">
+                 <label v-for="place in backgroundSelectionList" :key="place.name" :for="`bg-${currentStoryId}-${place.name}`" class="option-label-item">
+                   <div class="option-text">{{ place.name }}</div>
+                   <div class="switch">
+                     <input type="checkbox" :id="`bg-${currentStoryId}-${place.name}`" v-model="place.selected" class="switch-input">
+                     <label :for="`bg-${currentStoryId}-${place.name}`" class="switch-slider"></label>
+                   </div>
+                 </label>
+               </div>
+             </div>
+           </div>
+           <div class="modal-footer">
+             <button class="btn btn-secondary" @click="closeBackgroundDialog">取消</button>
+             <button class="btn btn-primary" @click="confirmBackgroundSelection" :disabled="!hasSelectedBackgrounds || isGenerating[`image-bg-${currentStoryId}`]">
+                 <font-awesome-icon v-if="isGenerating[`image-bg-${currentStoryId}`]" :icon="['fas', 'spinner']" spin />
+                 <span v-else><font-awesome-icon :icon="['fas', 'check']" /> 确认生成</span>
+             </button>
+           </div>
+        </div>
+    </div>
+
   </div>
 </template>
 
+
+
+
+
+<!-- Script section remains IDENTICAL to the one provided in the previous step -->
 <script>
 // 导入 IndexedDB 文件系统函数
 import {
@@ -385,6 +386,7 @@ export default {
       required: true
     }
   },
+   emits: ['show-message', 'close'], // Declare emitted events
   data() {
     return {
       isLoading: true,
@@ -413,16 +415,16 @@ export default {
       missingBackgroundsByStory: {}, // 按故事ID存储缺失的背景图片
       missingMusicFiles: [], // 缺失的音乐文件
       expectedMusicFiles: ['background.mp3', 'background1.mp3'], // 预期的音乐文件
-      
+
       // 新增：生成资源状态跟踪
       isGenerating: {}, // 通过键值对跟踪每个资源的生成状态
-      
+
       // 人物选择对话框
       showCharacterDialog: false,
       characterSelectionList: [], // 要选择的人物列表
       selectAllCharacters: false,
       isCharacterRegenerating: false, // 是重新生成(true)还是补齐(false)
-      
+
       // 背景选择对话框
       showBackgroundDialog: false,
       backgroundSelectionList: [], // 要选择的背景列表
@@ -456,6 +458,11 @@ export default {
               const storyIdStr = parts[0]; // Keep as string, as keys in storyData are strings
               const audioFilename = parts[1];
               const audioIdMatch = audioFilename.match(/^(\d+)\.wav$/);
+               if (!audioIdMatch) { // Add check if match fails
+                    console.warn(`Could not extract numeric ID from audio filename: ${audioFilename}`);
+                    uncategorized.push(file);
+                    return;
+               }
               const audioId = parseInt(audioIdMatch[1]); // Numeric ID from filename
 
               // Check if corresponding story data exists
@@ -521,6 +528,7 @@ export default {
        const title=[];
        const backgrounds = { byStory: {}, uncategorized: [] };
 
+       // Ensure characterData is an array before mapping
        const characterNames = new Set(Array.isArray(this.characterData) ? this.characterData.map(char => char && typeof char === 'object' ? char.name : null).filter(Boolean) : []);
 
 
@@ -536,6 +544,7 @@ export default {
 
             for (const storyId in this.storyData) {
                 const storyJson = this.storyData[storyId];
+                // Ensure storyJson and conversations exist and are correct types
                 if (storyJson && typeof storyJson === 'object' && Array.isArray(storyJson.conversations)) {
                     const placeMatch = storyJson.conversations.some(c => c && typeof c === 'object' && c.place === imageNameWithoutExt && c.place !== "");
                     if (placeMatch) {
@@ -547,33 +556,37 @@ export default {
             }
 
             if (foundInStories.length > 0) {
-                // 对找到的故事ID进行排序，确保结果一致
+                // Sort story IDs numerically
                 foundInStories.sort((a, b) => Number(a) - Number(b));
-                
-                // 在每个使用该场景的故事中都添加该图片
+
+                // Add image to each relevant story ID group
                 foundInStories.forEach(storyId => {
                     if (!backgrounds.byStory[storyId]) {
                         backgrounds.byStory[storyId] = [];
                     }
-                    // 创建文件的副本，避免引用同一对象
+                    // Add a copy of the file object
                     backgrounds.byStory[storyId].push({...file});
                 });
             } else {
+                // If not found in any story's places, add to uncategorized
                 backgrounds.uncategorized.push(file);
             }
            }
        });
 
+       // Sort characters by name
        characters.sort((a, b) => a.name.localeCompare(b.name));
 
-        const sortedBgByStoryKeys = Object.keys(backgrounds.byStory).sort((a, b) => Number(a) - Number(b));
+       // Sort story IDs numerically for backgrounds
+       const sortedBgByStoryKeys = Object.keys(backgrounds.byStory).sort((a, b) => Number(a) - Number(b));
        const sortedBgByStory = {};
        sortedBgByStoryKeys.forEach(key => {
-            sortedBgByStory[key] = backgrounds.byStory[key];
-            sortedBgByStory[key].sort((a, b) => a.name.localeCompare(b.name));
+            // Sort files within each story group by name
+            sortedBgByStory[key] = backgrounds.byStory[key].sort((a, b) => a.name.localeCompare(b.name));
        });
-        backgrounds.byStory = sortedBgByStory;
+       backgrounds.byStory = sortedBgByStory;
 
+       // Sort uncategorized backgrounds by name
        backgrounds.uncategorized.sort((a, b) => a.name.localeCompare(b.name));
 
        return { characters, backgrounds, title };
@@ -583,16 +596,14 @@ export default {
     hasMissingAudioResources() {
       return Object.values(this.missingAudioByStory).some(items => items.length > 0);
     },
-    
     hasMissingImageResources() {
-      return this.missingTitleImage || 
-             this.missingCharacterImages.length > 0 || 
+      return this.missingTitleImage ||
+             this.missingCharacterImages.length > 0 ||
              Object.values(this.missingBackgroundsByStory).some(items => items.length > 0);
     },
-    
     hasMissingResources() {
-      return this.hasMissingAudioResources || 
-             this.hasMissingImageResources || 
+      return this.hasMissingAudioResources ||
+             this.hasMissingImageResources ||
              this.missingMusicFiles.length > 0;
     },
 
@@ -612,17 +623,17 @@ export default {
     hasResources() {
       return this.hasAudioResources || this.hasImageResources || this.hasMusicResources;
     },
-    
+
     // 新增：判断是否有选中的角色
     hasSelectedCharacters() {
       return this.characterSelectionList.some(char => char.selected);
     },
-    
+
     // 新增：判断是否有选中的背景
     hasSelectedBackgrounds() {
       return this.backgroundSelectionList.some(place => place.selected);
     },
-    
+
     // 新增：判断是否有任何角色正在生成中
     isAnyCharacterGenerating() {
       return Object.keys(this.isGenerating).some(key => key.startsWith('image-character-') && this.isGenerating[key]);
@@ -631,15 +642,25 @@ export default {
   watch: {
     storyTitle: {
       immediate: true,
-      handler() {
-        this.fetchResources();
+      handler(newTitle, oldTitle) {
+         if (newTitle !== oldTitle) { // Prevent fetch on initial undefined->value transition if handled by mounted
+             console.log(`Story title changed to: ${newTitle}, fetching resources.`);
+             this.fetchResources();
+         }
       }
     }
   },
   mounted() {
-    // Event listeners are bound in the template
+     console.log(`ReadResources mounted with storyTitle: ${this.storyTitle}`);
+     if (this.storyTitle) {
+         this.fetchResources(); // Fetch resources when component mounts with a valid title
+     } else {
+         console.warn("ReadResources mounted without a storyTitle prop.");
+         this.isLoading = false; // Stop loading state if no title
+         this.error = "未指定故事标题";
+     }
   },
-  beforeDestroy() {
+  beforeUnmount() { // Changed from beforeDestroy
     this.stopAudio();
     this.releaseObjectUrls();
   },
@@ -648,16 +669,20 @@ export default {
     setStoryTitleConfig() {
       try {
         // 读取现有配置或创建新配置
-        const config = JSON.parse(localStorage.getItem('aiGalgameConfig'));
-        
+        let config = {};
+        const configStr = localStorage.getItem('aiGalgameConfig');
+        if (configStr) {
+            config = JSON.parse(configStr);
+        }
+
         // 确保剧情对象存在
         if (!config.剧情) {
           config.剧情 = {};
         }
-        
+
         // 设置story_title
         config.剧情.story_title = this.storyTitle;
-        
+
         // 保存回localStorage
         localStorage.setItem('aiGalgameConfig', JSON.stringify(config));
         console.log('已设置本地存储的剧情title为:', this.storyTitle);
@@ -671,309 +696,256 @@ export default {
     async regenerateAudio(storyId) {
       // 设置localStorage配置
       this.setStoryTitleConfig();
-      
-      this.isGenerating[`audio-${storyId}`] = true;
-      
+
+      const generationKey = `audio-${storyId}`;
+      // Vue 3 reactivity: direct assignment should work
+      this.isGenerating[generationKey] = true;
+      this.showNotification(`开始生成片段 ${storyId} 的语音，请稍候...`, 'info');
+
       try {
-        
-        try {
-          this.showNotification(`开始生成，注意不要重复点击按钮`, 'warning');
-          await generateVoice(storyId);
-          console.log(`已重新生成语音: 故事ID ${storyId}`);
-        } catch (err) {
-          console.error(`生成语音失败: 故事ID ${storyId}`, err);
-          this.showNotification(`生成语音失败: 故事ID ${storyId}`, 'error');
-        } finally {
-          //this.$set(this.isGenerating, `audio-${storyId}-${item.audioId}`, false);
-          //this.isGenerating[`audio-${storyId}-${item.audioId}`]=false;
-        }
-        
-        
-        
-        this.showNotification(`故事片段 ${storyId} 的语音生成完成`, 'success');
-        
-        // 重新加载资源列表以显示新生成的资源
-        await this.fetchResources();
-        
+          // Call generateVoice (assuming it handles errors internally or throws)
+          await generateVoice(storyId); // Pass only storyId
+          console.log(`已请求重新生成语音: 故事ID ${storyId}`);
+          this.showNotification(`故事片段 ${storyId} 的语音生成请求已发送`, 'success');
+
+          // Refresh resource list after generation completes (or potentially after a delay)
+          // Consider adding a mechanism to know when generation is actually done if generateVoice is async *background* task
+          await this.fetchResources();
+
       } catch (err) {
-        console.error(`重新生成语音失败: 故事ID ${storyId}`, err);
-        this.showNotification(`重新生成语音失败: 故事片段 ${storyId}`, 'error');
+          console.error(`请求生成语音失败: 故事ID ${storyId}`, err);
+          this.showNotification(`请求生成语音失败 (片段 ${storyId}): ${err.message || '未知错误'}`, 'error');
       } finally {
-        //this.$set(this.isGenerating, `audio-${storyId}`, false);
-        this.isGenerating[`audio-${storyId}`]=false;
+          // Reset generating state regardless of success/failure
+           this.isGenerating[generationKey] = false;
       }
     },
-        
+
     // 新增：重新生成标题图片的方法
     async regenerateTitleImage() {
-      // 设置localStorage配置
       this.setStoryTitleConfig();
-      
-      //this.$set(this.isGenerating, 'image-title', true);
-      this.isGenerating['image-title']=true;
+      const generationKey = 'image-title';
+      this.isGenerating[generationKey] = true;
+      this.showNotification('开始生成封面图片...', 'info');
+
       try {
-        await getTitleImagesJS(1);
-        console.log('已重新生成标题图片');
-        this.showNotification('标题图片生成完成', 'success');
-        
-        // 重新加载资源列表以显示新生成的资源
-        await this.fetchResources();
-        
+        await getTitleImagesJS(1); // Assuming 1 means generate title image
+        console.log('已请求重新生成标题图片');
+        this.showNotification('封面图片生成请求已发送', 'success');
+        await this.fetchResources(); // Refresh list
       } catch (err) {
-        console.error('生成标题图片失败:', err);
-        this.showNotification('生成标题图片失败', 'error');
+        console.error('请求生成标题图片失败:', err);
+        this.showNotification(`生成封面图片失败: ${err.message || '未知错误'}`, 'error');
       } finally {
-        this.isGenerating['image-title']=false
-        //this.$set(this.isGenerating, 'image-title', false);
+        this.isGenerating[generationKey] = false;
       }
     },
-    
+
     // 新增：显示人物选择对话框
     showCharacterSelection(isRegenerate) {
       this.isCharacterRegenerating = isRegenerate;
-      
-      // 准备人物选择列表
+      const charactersAvailable = Array.isArray(this.characterData) ? this.characterData.filter(char => char && typeof char === 'object' && char.name) : [];
+
       if (isRegenerate) {
-        // 重新生成：包括所有人物，默认全不选
-        this.characterSelectionList = Array.isArray(this.characterData) 
-          ? this.characterData
-            .filter(char => char && typeof char === 'object' && char.name)
-            .map(char => ({
-              name: char.name,
-              selected: false
-            }))
-          : [];
+        this.characterSelectionList = charactersAvailable.map(char => ({ name: char.name, selected: false }));
       } else {
-        // 补齐：只包括缺失的人物，默认全选
-        this.characterSelectionList = this.missingCharacterImages.map(item => ({
-          name: item.name,
-          selected: true
-        }));
+        const missingNames = new Set(this.missingCharacterImages.map(item => item.name));
+        this.characterSelectionList = charactersAvailable
+            .filter(char => missingNames.has(char.name)) // Filter to only missing characters
+            .map(char => ({ name: char.name, selected: true })); // Default select missing ones
       }
-      
-      // 设置全选状态
-      this.selectAllCharacters = this.characterSelectionList.length > 0 && 
-                                this.characterSelectionList.every(char => char.selected);
-      
-      // 显示对话框
+
+       // Update selectAll state based on the list
+      this.selectAllCharacters = this.characterSelectionList.length > 0 && this.characterSelectionList.every(char => char.selected);
       this.showCharacterDialog = true;
     },
-    
+
     // 新增：关闭人物选择对话框
     closeCharacterDialog() {
       this.showCharacterDialog = false;
-      this.characterSelectionList = [];
+      this.characterSelectionList = []; // Clear list
     },
-    
+
     // 新增：全选/取消全选人物
     toggleAllCharacters() {
       this.characterSelectionList.forEach(char => {
+        // Use Vue's reactivity by assigning directly
         char.selected = this.selectAllCharacters;
       });
     },
-    
+
     // 新增：确认人物选择并生成
     async confirmCharacterSelection() {
-      // 设置localStorage配置
       this.setStoryTitleConfig();
-      
-      // 获取选中的人物名称
       const selectedCharacters = this.characterSelectionList
         .filter(char => char.selected)
         .map(char => char.name);
-      
+
       if (selectedCharacters.length === 0) {
         this.showNotification('请至少选择一个人物', 'warning');
         return;
       }
-      
-      // 关闭对话框
-      this.closeCharacterDialog();
-      
-      // 设置生成状态
-      //this.$set(this.isGenerating, 'image-characters', true);
-      this.isGenerating['image-characters']=true;
+
+      this.closeCharacterDialog(); // Close dialog first
+
+      // Set generating state for the overall group and individual characters
+      const groupKey = 'image-characters';
+      this.isGenerating[groupKey] = true;
       selectedCharacters.forEach(charName => {
-        this.isGenerating[`image-character-${charName}`]=true;
-        //this.$set(this.isGenerating, `image-character-${charName}`, true);
+         this.isGenerating[`image-character-${charName}`] = true;
       });
-      
+       this.showNotification(`开始生成 ${selectedCharacters.length} 个人物图片...`, 'info');
+
+
       try {
-        // 调用生成函数
         await getSinglePersonImageJS(selectedCharacters);
-        console.log('已生成人物图片:', selectedCharacters);
-        this.showNotification(`已生成 ${selectedCharacters.length} 个人物图片`, 'success');
-        
-        // 重新加载资源列表以显示新生成的资源
-        await this.fetchResources();
-        
+        console.log('已请求生成人物图片:', selectedCharacters);
+        this.showNotification(`已请求生成 ${selectedCharacters.length} 个人物图片`, 'success');
+        await this.fetchResources(); // Refresh list
       } catch (err) {
-        console.error('生成人物图片失败:', err);
-        this.showNotification('生成人物图片失败', 'error');
+        console.error('请求生成人物图片失败:', err);
+        this.showNotification(`生成人物图片失败: ${err.message || '未知错误'}`, 'error');
       } finally {
-        // 重置生成状态
-        //this.$set(this.isGenerating, 'image-characters', false);
-        this.isGenerating['image-characters']=false;
-        selectedCharacters.forEach(charName => {
-          //this.$set(this.isGenerating, `image-character-${charName}`, false);
-          this.isGenerating[`image-character-${charName}`]=false;
-        });
+        // Reset generating state
+         this.isGenerating[groupKey] = false;
+         selectedCharacters.forEach(charName => {
+            this.isGenerating[`image-character-${charName}`] = false;
+         });
       }
     },
-    
+
     // 新增：显示背景选择对话框
     showBackgroundSelection(storyId, isRegenerate) {
       this.currentStoryId = storyId;
       this.isBackgroundRegenerating = isRegenerate;
-      
-      // 从故事数据中获取可能的背景场景
       const storyJson = this.storyData[storyId];
       const usedPlaces = new Set();
-      
+
       if (storyJson && Array.isArray(storyJson.conversations)) {
-        storyJson.conversations.forEach(conversation => {
-          if (conversation && conversation.place && conversation.place !== "") {
-            usedPlaces.add(conversation.place);
-          }
+        storyJson.conversations.forEach(conv => {
+          if (conv && conv.place && conv.place !== "") usedPlaces.add(conv.place);
         });
       }
-      
-      // 准备背景选择列表
-      if (isRegenerate) {
-        // 重新生成：包括所有背景，默认全不选
-        this.backgroundSelectionList = Array.from(usedPlaces).map(place => ({
-          name: place,
-          selected: false
-        }));
-      } else {
-        // 补齐：只包括缺失的背景，默认全选
-        const missingBackgrounds = this.getMissingBackgroundsForStory(storyId);
-        this.backgroundSelectionList = missingBackgrounds.map(item => ({
-          name: item.name,
-          selected: true
-        }));
-      }
-      
-      // 设置全选状态
-      this.selectAllBackgrounds = this.backgroundSelectionList.length > 0 && 
-                                 this.backgroundSelectionList.every(place => place.selected);
-      
-      // 显示对话框
-      this.showBackgroundDialog = true;
+
+       if (isRegenerate) {
+          this.backgroundSelectionList = Array.from(usedPlaces).map(place => ({ name: place, selected: false }));
+       } else {
+           const missingBackgrounds = this.getMissingBackgroundsForStory(storyId);
+           const missingPlaces = new Set(missingBackgrounds.map(item => item.name));
+           // Combine used places from story with missing list, ensuring unique names
+           const allPossiblePlaces = new Set([...usedPlaces, ...missingPlaces]);
+           this.backgroundSelectionList = Array.from(allPossiblePlaces)
+               .map(place => ({
+                   name: place,
+                   selected: missingPlaces.has(place) // Default select missing ones
+               }));
+       }
+
+
+       this.selectAllBackgrounds = this.backgroundSelectionList.length > 0 && this.backgroundSelectionList.every(place => place.selected);
+       this.showBackgroundDialog = true;
     },
-    
+
     // 新增：关闭背景选择对话框
     closeBackgroundDialog() {
       this.showBackgroundDialog = false;
       this.backgroundSelectionList = [];
       this.currentStoryId = null;
     },
-    
+
     // 新增：全选/取消全选背景
     toggleAllBackgrounds() {
       this.backgroundSelectionList.forEach(place => {
         place.selected = this.selectAllBackgrounds;
       });
     },
-    
+
     // 新增：确认背景选择并生成
     async confirmBackgroundSelection() {
-      // 设置localStorage配置
       this.setStoryTitleConfig();
-      
       const storyId = this.currentStoryId;
-      
-      // 获取选中的背景名称
       const selectedPlaces = this.backgroundSelectionList
         .filter(place => place.selected)
         .map(place => place.name);
-      
+
       if (selectedPlaces.length === 0) {
         this.showNotification('请至少选择一个背景', 'warning');
         return;
       }
-      
-      // 关闭对话框
-      this.closeBackgroundDialog();
-      
-      // 设置生成状态
-      //his.$set(this.isGenerating, `image-bg-${storyId}`, true);
-      this.isGenerating[`image-bg-${storyId}`]=true;
+
+      this.closeBackgroundDialog(); // Close dialog first
+
+      const groupKey = `image-bg-${storyId}`;
+      this.isGenerating[groupKey] = true;
       selectedPlaces.forEach(placeName => {
-        //this.$set(this.isGenerating, `image-bg-${storyId}-${placeName}`, true);
-        this.isGenerating[`image-bg-${storyId}-${placeName}`]=true;
+         this.isGenerating[`image-bg-${storyId}-${placeName}`] = true;
       });
-      
+       this.showNotification(`开始准备并生成片段 ${storyId} 的 ${selectedPlaces.length} 个背景图片...`, 'info');
+
+
       try {
-        // 1. 合并故事数据
+        // 1. Merge story data (necessary for getPlacesImagesJS)
         await mergeStory(storyId);
         console.log(`已合并故事数据: 故事ID ${storyId}`);
-        
-        // 2. 写入选中的地点
+
+        // 2. Write selected places to place.json
         const placesPath = `/data/${this.storyTitle}/story/place.json`;
-        const placesData = JSON.stringify(selectedPlaces);
+        // Ensure data is always an array, even if empty
+        const placesData = JSON.stringify(selectedPlaces || []);
         try {
-          // 这里需要实现一个写入文件的方法，该示例假设IndexedDBFileSystem中有writeFile方法
-          // 如果没有，您需要自行实现或修改此处逻辑
           await writeFile(placesPath, placesData);
           console.log(`已写入地点数据: ${placesPath}`, selectedPlaces);
-        } catch (err) {
-          console.error(`写入地点数据失败: ${placesPath}`, err);
-          throw new Error(`写入地点数据失败: ${err.message}`);
+        } catch (writeErr) {
+          console.error(`写入地点数据失败: ${placesPath}`, writeErr);
+          throw new Error(`写入地点数据失败: ${writeErr.message}`); // Rethrow to be caught below
         }
-        
-        // 3. 生成背景图片
-        await getPlacesImagesJS(1);
-        console.log(`已生成背景图片: 地点 ${selectedPlaces.join(', ')}`);
-        this.showNotification(`已生成 ${selectedPlaces.length} 个背景图片`, 'success');
-        
-        // 重新加载资源列表以显示新生成的资源
-        await this.fetchResources();
-        
+
+        // 3. Generate background images
+        await getPlacesImagesJS(1); // Assuming 1 means generate based on place.json
+        console.log(`已请求生成背景图片: 地点 ${selectedPlaces.join(', ')}`);
+        this.showNotification(`已请求生成 ${selectedPlaces.length} 个背景图片`, 'success');
+        await this.fetchResources(); // Refresh list
       } catch (err) {
         console.error(`生成背景图片失败: 故事ID ${storyId}`, err);
-        this.showNotification('生成背景图片失败', 'error');
+        this.showNotification(`生成背景图片失败 (片段 ${storyId}): ${err.message || '未知错误'}`, 'error');
       } finally {
-        // 重置生成状态
-        //this.$set(this.isGenerating, `image-bg-${storyId}`, false);
-        this.isGenerating[`image-bg-${storyId}`]=false;
-        selectedPlaces.forEach(placeName => {
-          //this.$set(this.isGenerating, `image-bg-${storyId}-${placeName}`, false);
-          this.isGenerating[`image-bg-${storyId}-${placeName}`]=false;
-        });
+        // Reset generating state
+         this.isGenerating[groupKey] = false;
+         selectedPlaces.forEach(placeName => {
+            this.isGenerating[`image-bg-${storyId}-${placeName}`] = false;
+         });
       }
     },
-    
+
     // 新增：生成音乐的方法
     async regenerateMusic() {
-      // 设置localStorage配置
       this.setStoryTitleConfig();
-      
-      //this.$set(this.isGenerating, 'music', true);
-      this.isGenerating['music']=true;
-      
+      const generationKey = 'music';
+      this.isGenerating[generationKey] = true;
+      this.showNotification('开始生成背景音乐...', 'info');
+
       try {
-        await generateBackgroundMusic(console.log);
-        console.log('已生成背景音乐');
-        this.showNotification('背景音乐生成完成', 'success');
-        
-        // 重新加载资源列表以显示新生成的资源
-        await this.fetchResources();
-        
+        let gengeratestatus=await generateBackgroundMusic(console.log); // Pass console.log for progress
+        console.log('已请求生成背景音乐');
+        if(gengeratestatus==="error"){
+          this.showNotification(`生成背景音乐失败:未知错误`, 'error');
+          return;
+        }
+        this.showNotification('背景音乐生成请求已发送', 'success');
+        await this.fetchResources(); // Refresh list
       } catch (err) {
-        console.error('生成背景音乐失败:', err);
-        this.showNotification('生成背景音乐失败', 'error');
+        console.error('请求生成背景音乐失败:', err);
+        this.showNotification(`生成背景音乐失败: ${err.message || '未知错误'}`, 'error');
       } finally {
-        //this.$set(this.isGenerating, 'music', false);
-        this.isGenerating['music']=false;
+        this.isGenerating[generationKey] = false;
       }
     },
-    
+
 
     async fetchResources() {
       this.isLoading = true;
       this.error = null;
-      // Reset state
+      // Reset state carefully
       this.resourceCategories = { voice: [], images: [], music: [] };
       this.storyData = {};
       this.characterData = [];
@@ -982,235 +954,67 @@ export default {
       this.musicDirExists = false;
       this.storyDirExists = false;
       this.characterFileExists = false;
-      this.selectedResource = null;
-      this.previewUrl = null;
+      // Don't reset selectedResource or previewUrl here, let selectResource handle it
+      // this.selectedResource = null;
+      // this.previewUrl = null;
+      // Do release old URLs
       this.releaseObjectUrls();
-      // 重置缺失资源数据
       this.missingAudioByStory = {};
       this.missingTitleImage = null;
       this.missingCharacterImages = [];
       this.missingBackgroundsByStory = {};
       this.missingMusicFiles = [];
-      // 重置生成状态
-      this.isGenerating = {};
+      this.isGenerating = {}; // Reset generating status
 
       const baseDir = `/data/${this.storyTitle}`;
-      const audioDir = `${baseDir}/audio`; // Base audio directory
+      const audioDir = `${baseDir}/audio`;
       const imagesDir = `${baseDir}/images`;
       const musicDir = `${baseDir}/music`;
       const storyDir = `${baseDir}/story`;
       const characterFilePath = `${baseDir}/character.json`;
 
-      // Helper to safely list directory
-      const safeListDirectory = async (path) => {
-          try {
-              const items = await listDirectory(path);
-              return { items: items || [], exists: true };
-          } catch (err) {
-               if (err.message && (err.message.includes('目录不存在') || err.message.includes('标题') || err.message.includes('不存在'))) {
-                   console.warn(`Directory "${path}" does not exist or access denied, skipping listing.`, err.message);
-                   return { items: [], exists: false };
-               } else {
-                   console.error(`Failed to list directory "${path}":`, err);
-                   throw err; // Rethrow unexpected errors
-               }
-          }
-      };
-
-       // Helper to safely read file
-       const safeReadFile = async (path) => {
-            try {
-                const data = await readFile(path);
-                // Check if data is explicitly undefined, often indicating file not found by readFile implementation
-                if (data === undefined) {
-                    console.warn(`File "${path}" read returned undefined, treating as non-existent.`);
-                    return { data: null, exists: false };
-                }
-                return { data: data, exists: true };
-            } catch (err) {
-                 // Catch explicit errors from readFile
-                if (err.message && (err.message.includes('文件不存在') || err.message.includes('不存在') || err.message.includes('无法读取'))) {
-                    console.warn(`File "${path}" does not exist or access denied, skipping read.`, err.message);
-                    return { data: null, exists: false };
-                } else {
-                    console.error(`Failed to read file "${path}":`, err);
-                    throw err; // Rethrow unexpected errors
-                }
-            }
-       };
-
-       // Helper to process potentially pre-parsed JSON data
-       const processJsonData = (rawData, filePath) => {
-           if (typeof rawData === 'string') {
-               try {
-                  return JSON.parse(rawData);
-               } catch (e) {
-                   console.error(`Failed to parse JSON string from ${filePath}:`, e);
-                   throw new Error(`Invalid JSON format in ${filePath}`);
-               }
-           } else if (rawData instanceof ArrayBuffer) {
-               try {
-                  return JSON.parse(new TextDecoder().decode(rawData));
-               } catch(e) {
-                   console.error(`Failed to decode/parse ArrayBuffer from ${filePath}:`, e);
-                   throw new Error(`Invalid JSON format (from ArrayBuffer) in ${filePath}`);
-               }
-           } else if (typeof rawData === 'object' && rawData !== null) {
-               // Assume it's already parsed correctly
-               return rawData;
-           } else {
-               throw new Error(`Unexpected or invalid data type for ${filePath}: ${typeof rawData}`);
-           }
-       };
-
+      // --- safeListDirectory, safeReadFile, processJsonData helpers remain the same ---
+      const safeListDirectory = async (path) => { /* ... */ try { const items = await listDirectory(path); return { items: items || [], exists: true }; } catch (err) { if (err.message && (err.message.includes('目录不存在') || err.message.includes('标题') || err.message.includes('不存在'))) { console.warn(`Directory "${path}" does not exist or access denied, skipping listing.`, err.message); return { items: [], exists: false }; } else { console.error(`Failed to list directory "${path}":`, err); throw err; } } };
+      const safeReadFile = async (path) => { /* ... */ try { const data = await readFile(path); if (data === undefined) { console.warn(`File "${path}" read returned undefined, treating as non-existent.`); return { data: null, exists: false }; } return { data: data, exists: true }; } catch (err) { if (err.message && (err.message.includes('文件不存在') || err.message.includes('不存在') || err.message.includes('无法读取'))) { console.warn(`File "${path}" does not exist or access denied, skipping read.`, err.message); return { data: null, exists: false }; } else { console.error(`Failed to read file "${path}":`, err); throw err; } } };
+      const processJsonData = (rawData, filePath) => { /* ... */ if (typeof rawData === 'string') { try { return JSON.parse(rawData); } catch (e) { console.error(`Failed to parse JSON string from ${filePath}:`, e); throw new Error(`Invalid JSON format in ${filePath}`); } } else if (rawData instanceof ArrayBuffer) { try { return JSON.parse(new TextDecoder().decode(rawData)); } catch(e) { console.error(`Failed to decode/parse ArrayBuffer from ${filePath}:`, e); throw new Error(`Invalid JSON format (from ArrayBuffer) in ${filePath}`); } } else if (typeof rawData === 'object' && rawData !== null) { return rawData; } else { throw new Error(`Unexpected or invalid data type for ${filePath}: ${typeof rawData}`); } };
 
       try {
-        // === Load Metadata Files (Character and Story) first ===
-
-        // Load character.json
+        // === Load Metadata (Character and Story) ===
         const { data: characterFileData, exists: charFileExists } = await safeReadFile(characterFilePath);
         this.characterFileExists = charFileExists;
-        if (charFileExists && characterFileData !== null) {
-             try {
-                  this.characterData = processJsonData(characterFileData, characterFilePath);
-                  if (!Array.isArray(this.characterData)) {
-                      console.error('Character data is not an array:', this.characterData);
-                      this.showNotification('character.json 格式错误 (应为数组)', 'error');
-                      this.characterData = [];
-                  } else {
-                     console.log('Character data loaded successfully.');
-                  }
-             } catch (e) {
-                 this.showNotification(`处理 character.json 失败: ${e.message}`, 'error');
-                 this.characterData = [];
-             }
-        } else {
-             console.log(`Character file "${characterFilePath}" ${charFileExists ? 'read returned null' : 'does not exist or is inaccessible.'}`);
-        }
+        if (charFileExists && characterFileData !== null) { try { this.characterData = processJsonData(characterFileData, characterFilePath); if (!Array.isArray(this.characterData)) { console.error('Character data is not an array:', this.characterData); this.characterData = []; } } catch (e) { this.showNotification(`处理 character.json 失败: ${e.message}`, 'error'); this.characterData = []; } } else { console.log(`Character file ${characterFilePath} ${charFileExists ? 'is null' : 'not found'}.`); }
 
-        // Load story/{id}.json files
         const { items: storyItems, exists: sDirExists } = await safeListDirectory(storyDir);
         this.storyDirExists = sDirExists;
         if (sDirExists && storyItems.length > 0) {
-             const jsonFiles = storyItems.filter(item =>
-                 !item.isFolder &&
-                 item.name.endsWith('.json') &&
-                 /^\d+$/.test(item.name.replace(/\.json$/, ''))
-             );
-             console.log(`Found ${jsonFiles.length} numeric story JSON files to process.`);
-
-             const storyPromises = jsonFiles.map(async file => {
-                 const { data: fileData, exists: fileExists } = await safeReadFile(file.path);
-                 if (fileExists && fileData !== null) {
-                     try {
-                         const storyId = file.name.replace(/\.json$/, '');
-                         const jsonData = processJsonData(fileData, file.path);
-                          if (typeof jsonData !== 'object' || jsonData === null || !Array.isArray(jsonData.conversations)) {
-                              throw new Error("Missing or non-array 'conversations' property.");
-                          }
-                         return { id: storyId, json: jsonData };
-                     } catch (e) {
-                         console.error(`Failed to process story JSON ${file.name}:`, e);
-                         this.showNotification(`处理故事 JSON "${file.name}" 失败: ${e.message}`, 'error');
-                         return null; // Skip this file on error
-                     }
-                 } else {
-                      console.log(`Story file "${file.path}" ${fileExists ? 'read returned null' : 'does not exist or is inaccessible.'}`);
-                      return null; // Skip if file doesn't exist or read failed safely
-                 }
-             });
-
-            const storyResults = await Promise.all(storyPromises);
-            this.storyData = storyResults.reduce((acc, result) => {
-                 if (result && result.id && result.json) {
-                     acc[result.id] = result.json; // Key is the string ID
-                 }
-                 return acc;
-            }, {});
-            console.log('Story data loaded for IDs:', Object.keys(this.storyData));
-
-        } else {
-             console.log(`Story directory "${storyDir}" ${sDirExists ? 'is empty or contains no numeric JSON files' : 'does not exist or is inaccessible.'}`);
+             const jsonFiles = storyItems.filter(item => !item.isFolder && item.name.endsWith('.json') && /^\d+\.json$/.test(item.name));
+             const storyPromises = jsonFiles.map(async file => { const { data: fileData, exists: fileExists } = await safeReadFile(file.path); if (fileExists && fileData !== null) { try { const storyId = file.name.replace(/\.json$/, ''); const jsonData = processJsonData(fileData, file.path); if (typeof jsonData !== 'object' || jsonData === null || !Array.isArray(jsonData.conversations)) { throw new Error("Missing or non-array 'conversations' property."); } return { id: storyId, json: jsonData }; } catch (e) { this.showNotification(`处理故事 JSON "${file.name}" 失败: ${e.message}`, 'error'); return null; } } return null; });
+             const storyResults = await Promise.all(storyPromises);
+             this.storyData = storyResults.reduce((acc, result) => { if (result) acc[result.id] = result.json; return acc; }, {});
         }
 
-        // === Load Resource Files (Audio, Image, Music) ===
-
-        // Load Audio Resources from /audio/{storyid}/{id}.wav
+        // === Load Resource Files ===
         const { items: audioTopLevelItems, exists: aDirExists } = await safeListDirectory(audioDir);
         this.audioDirExists = aDirExists;
-        const collectedAudioFiles = []; // Use a temporary array
-
+        const collectedAudioFiles = [];
         if (aDirExists && audioTopLevelItems.length > 0) {
-            const subDirPromises = audioTopLevelItems
-                // Filter for top-level items that are folders with numeric names
-                .filter(item => item.isFolder && /^\d+$/.test(item.name))
-                .map(async (folderItem) => {
-                    const storyId = folderItem.name;
-                    const subDirPath = `${audioDir}/${storyId}`;
-                    try {
-                        // List contents of the numeric subdirectory
-                                                // List contents of the numeric subdirectory
-                        const { items: filesInFolder, exists: subDirListed } = await safeListDirectory(subDirPath);
-                         if (subDirListed) {
-                              // Filter for .wav files directly inside this storyId folder whose name is {id}.wav
-                              return filesInFolder.filter(f =>
-                                  !f.isFolder &&
-                                  f.name.endsWith('.wav') &&
-                                  /^\d+\.wav$/.test(f.name)
-                              );
-                         } else {
-                              return []; // Subdirectory listing failed safely
-                         }
-                    } catch (subDirError) {
-                        // Catch errors if safeListDirectory rethrows
-                        console.error(`Error listing audio sub-directory ${subDirPath}:`, subDirError);
-                        return []; // Return empty on error
-                    }
-                });
-
-            // Wait for all subdirectory listings to complete
-            const filesFromSubDirs = await Promise.all(subDirPromises);
-            // Flatten the array of arrays and add to collectedAudioFiles
-            filesFromSubDirs.forEach(files => collectedAudioFiles.push(...files));
-
-            console.log('Audio items fetched from story subfolders:', collectedAudioFiles.length);
-
-        } else {
-             console.log(`Audio directory "${audioDir}" ${aDirExists ? 'is empty or contains no numeric subfolders' : 'does not exist or is inaccessible.'}`);
+             const subDirPromises = audioTopLevelItems.filter(item => item.isFolder && /^\d+$/.test(item.name)).map(async (folderItem) => { const subDirPath = `${audioDir}/${folderItem.name}`; try { const { items: filesInFolder, exists: subDirListed } = await safeListDirectory(subDirPath); return subDirListed ? filesInFolder.filter(f => !f.isFolder && f.name.endsWith('.wav') && /^\d+\.wav$/.test(f.name)) : []; } catch (subDirError) { console.error(`Error listing audio sub-directory ${subDirPath}:`, subDirError); return []; } });
+             const filesFromSubDirs = await Promise.all(subDirPromises);
+             filesFromSubDirs.forEach(files => collectedAudioFiles.push(...files));
         }
-
-        // Assign the collected files to the reactive property
         this.resourceCategories.voice = collectedAudioFiles;
 
-        // Load Image Resources (assuming flat structure in /images)
         const { items: imageItems, exists: iDirExists } = await safeListDirectory(imagesDir);
         this.imageDirExists = iDirExists;
-        if (iDirExists) {
-            this.resourceCategories.images = imageItems.filter(item => !item.isFolder && item.name.endsWith('.png'));
-            console.log('Image items fetched:', this.resourceCategories.images.length);
-        } else {
-             console.log(`Image directory "${imagesDir}" does not exist or is inaccessible.`);
-        }
+        if (iDirExists) this.resourceCategories.images = imageItems.filter(item => !item.isFolder && item.name.endsWith('.png'));
 
-        // Load Music Resources (assuming flat structure in /music)
         const { items: musicItems, exists: mDirExists } = await safeListDirectory(musicDir);
         this.musicDirExists = mDirExists;
-        if (mDirExists) {
-            this.resourceCategories.music = musicItems.filter(item => !item.isFolder && item.name.endsWith('.mp3'));
-             console.log('Music items fetched:', this.resourceCategories.music.length);
-        } else {
-             console.log(`Music directory "${musicDir}" does not exist or is inaccessible.`);
-        }
+        if (mDirExists) this.resourceCategories.music = musicItems.filter(item => !item.isFolder && item.name.endsWith('.mp3'));
 
-        // 生成"本应存在"但实际不存在的资源列表
         this.generateMissingResourcesList();
 
-         // Log the final count of raw resources
-         const totalResources = this.resourceCategories.voice.length + this.resourceCategories.images.length + this.resourceCategories.music.length;
-         console.log(`Total raw resource files loaded for "${this.storyTitle}": ${totalResources}`);
-
       } catch (err) {
-        // Catch errors rethrown by helpers or other unexpected errors
         console.error('加载资源列表或元数据时发生严重错误:', err);
         this.error = err.message || '发生未知错误';
         this.showNotification('加载资源时发生严重错误', 'error');
@@ -1219,173 +1023,92 @@ export default {
       }
     },
 
-    // 生成缺失资源列表的新方法
+    // --- generateMissingResourcesList, findMissingAudioFiles, findMissingImageFiles, findMissingMusicFiles ---
+    // --- getMissingAudioForStory, getMissingBackgroundsForStory, handleMissingResourceClick ---
+    // --- Methods remain IDENTICAL to the one provided in the previous step ---
+        // 生成缺失资源列表的新方法
     generateMissingResourcesList() {
-      // 1. 检查缺失的语音文件
       this.findMissingAudioFiles();
-      
-      // 2. 检查缺失的图片文件
       this.findMissingImageFiles();
-      
-      // 3. 检查缺失的音乐文件
       this.findMissingMusicFiles();
-      
-      console.log('生成缺失资源列表完成');
-      console.log('- 缺失语音:', Object.keys(this.missingAudioByStory).length > 0);
-      console.log('- 缺失封面图:', !!this.missingTitleImage);
-      console.log('- 缺失角色图:', this.missingCharacterImages.length);
-      console.log('- 缺失背景图:', Object.keys(this.missingBackgroundsByStory).length);
-      console.log('- 缺失音乐:', this.missingMusicFiles.length);
+      console.log('Generated missing resources list.');
     },
-    
     // 查找缺失的语音文件
     findMissingAudioFiles() {
-      // 遍历所有故事数据
-      for (const storyId in this.storyData) {
-        const storyJson = this.storyData[storyId];
-        if (storyJson && Array.isArray(storyJson.conversations)) {
-          // 获取故事片段ID的已有语音文件
-          const existingAudioItems = this.classifiedAudio.byStory[storyId] || [];
-          const existingAudioIds = new Set(existingAudioItems.map(item => item.audioId));
-          
-          // 检查每个对话项
-          const missingAudios = [];
-          storyJson.conversations.forEach(conversation => {
-            // 找出具有有效character且带有id的对话
-            if (conversation && conversation.character && conversation.character !== "" && 
-                typeof conversation.id === 'number') {
-              const audioId = conversation.id;
-              
-              // 如果该ID的语音文件不存在，添加到缺失列表
-              if (!existingAudioIds.has(audioId)) {
-                let final_text=conversation.text.replace(/[\(（].*?[\)）]/g, '').replace(/ /g, "，").replace(/\n/g, "。");
-                while (final_text.startsWith("，") || final_text.startsWith("。")) {
-                    final_text = final_text.substring(1);
-                }
-                if (final_text.trim()){
-                missingAudios.push({
-                  id: audioId,
-                  name: `${audioId}.wav`,
-                  text: conversation.text || `对话 ${audioId}`,
-                  path: `/data/${this.storyTitle}/audio/${storyId}/${audioId}.wav`,
-                  type: 'audio',
-                  isMissing: true
-                });
-              }
-              }
-            }
-          });
-          
-          // 如果有缺失的语音文件，添加到对应故事ID
-          if (missingAudios.length > 0) {
-            this.missingAudioByStory[storyId] = missingAudios;
-          }
-        }
-      }
+       this.missingAudioByStory = {}; // Reset
+       for (const storyId in this.storyData) {
+         const storyJson = this.storyData[storyId];
+         if (storyJson && Array.isArray(storyJson.conversations)) {
+           const existingAudioItems = this.classifiedAudio.byStory[storyId] || [];
+           const existingAudioIds = new Set(existingAudioItems.map(item => item.audioId));
+           const missingAudios = [];
+           storyJson.conversations.forEach(conversation => {
+             if (conversation && conversation.character && conversation.character !== "" && typeof conversation.id === 'number') {
+               const audioId = conversation.id;
+               if (!existingAudioIds.has(audioId)) {
+                 let final_text=String(conversation.text || '').replace(/[\(（].*?[\)）]/g, '').replace(/ /g, "，").replace(/\n/g, "。");
+                 while (final_text.startsWith("，") || final_text.startsWith("。")) final_text = final_text.substring(1);
+                 if (final_text.trim()){
+                   missingAudios.push({ id: audioId, name: `${audioId}.wav`, text: conversation.text || `对话 ${audioId}`, path: `/data/${this.storyTitle}/audio/${storyId}/${audioId}.wav`, type: 'audio', isMissing: true });
+                 }
+               }
+             }
+           });
+           if (missingAudios.length > 0) this.missingAudioByStory[storyId] = missingAudios;
+         }
+       }
     },
-    
     // 查找缺失的图片文件
     findMissingImageFiles() {
-      // 1. 检查缺失的标题图片
-      const titleImageExists = this.classifiedImages.title.length > 0;
-      if (!titleImageExists) {
-        this.missingTitleImage = {
-          name: 'title',
-          path: `/data/${this.storyTitle}/images/title.png`,
-          type: 'image',
-          isMissing: true
-        };
-      }
-      
-      // 2. 检查缺失的人物图片
-      if (Array.isArray(this.characterData)) {
-        const existingCharacterImages = new Set(
-          this.classifiedImages.characters.map(file => file.name.replace(/\.png$/, ''))
-        );
-        
-        this.characterData.forEach(character => {
-          if (character && character.name && !existingCharacterImages.has(character.name)) {
-            this.missingCharacterImages.push({
-              name: character.name,
-              path: `/data/${this.storyTitle}/images/${character.name}.png`,
-              type: 'image',
-              isMissing: true
-            });
-          }
-        });
-      }
-      
-      // 3. 检查缺失的背景图片
-      for (const storyId in this.storyData) {
-          const storyJson = this.storyData[storyId];
-          if (storyJson && Array.isArray(storyJson.conversations)) {
-            // 获取故事片段中使用的所有非空背景场景
-            const usedPlaces = new Set();
-            storyJson.conversations.forEach(conversation => {
-              if (conversation && conversation.place && conversation.place !== "") {
-                usedPlaces.add(conversation.place);
-              }
-            });
-            
-            // 如果该故事片段有背景场景
-            if (usedPlaces.size > 0) {
-              // 获取该故事片段已有的背景图片
-              const existingBackgrounds = this.classifiedImages.backgrounds.byStory[storyId] || [];
-              const existingBackgroundNames = new Set(
-                existingBackgrounds.map(file => file.name.replace(/\.png$/, ''))
-              );
-              
-              // 检查缺失的背景图片
-              const missingBackgrounds = [];
-              usedPlaces.forEach(place => {
-                if (!existingBackgroundNames.has(place)) {
-                  missingBackgrounds.push({
-                    name: place,
-                    path: `/data/${this.storyTitle}/images/${place}.png`,
-                    type: 'image',
-                    isMissing: true
-                  });
-                }
-              });
-              
-              // 如果有缺失的背景图片，添加到对应故事ID
-              if (missingBackgrounds.length > 0) {
-                this.missingBackgroundsByStory[storyId] = missingBackgrounds;
-              }
-            }
-          }
-        }
+       this.missingTitleImage = null; // Reset
+       this.missingCharacterImages = []; // Reset
+       this.missingBackgroundsByStory = {}; // Reset
+
+       // Title image
+       if (this.classifiedImages.title.length === 0) {
+         this.missingTitleImage = { name: 'title', path: `/data/${this.storyTitle}/images/title.png`, type: 'image', isMissing: true };
+       }
+
+       // Character images
+       if (Array.isArray(this.characterData)) {
+         const existingCharacterImages = new Set(this.classifiedImages.characters.map(file => file.name.replace(/\.png$/, '')));
+         this.characterData.forEach(character => {
+           if (character && character.name && !existingCharacterImages.has(character.name)) {
+             this.missingCharacterImages.push({ name: character.name, path: `/data/${this.storyTitle}/images/${character.name}.png`, type: 'image', isMissing: true });
+           }
+         });
+       }
+
+       // Background images
+       for (const storyId in this.storyData) {
+           const storyJson = this.storyData[storyId];
+           if (storyJson && Array.isArray(storyJson.conversations)) {
+             const usedPlaces = new Set();
+             storyJson.conversations.forEach(conv => { if (conv && conv.place && conv.place !== "") usedPlaces.add(conv.place); });
+             if (usedPlaces.size > 0) {
+               const existingBackgrounds = this.classifiedImages.backgrounds.byStory[storyId] || [];
+               const existingBackgroundNames = new Set(existingBackgrounds.map(file => file.name.replace(/\.png$/, '')));
+               const missingBackgrounds = [];
+               usedPlaces.forEach(place => { if (!existingBackgroundNames.has(place)) missingBackgrounds.push({ name: place, path: `/data/${this.storyTitle}/images/${place}.png`, type: 'image', isMissing: true }); });
+               if (missingBackgrounds.length > 0) this.missingBackgroundsByStory[storyId] = missingBackgrounds;
+             }
+           }
+         }
     },
-    
     // 查找缺失的音乐文件
     findMissingMusicFiles() {
-      // 检查预期的音乐文件是否存在
-      const existingMusicNames = new Set(
-        this.resourceCategories.music.map(file => file.name)
-      );
-      
-      this.expectedMusicFiles.forEach(musicFile => {
-        if (!existingMusicNames.has(musicFile)) {
-          this.missingMusicFiles.push({
-            name: musicFile,
-            path: `/data/${this.storyTitle}/music/${musicFile}`,
-            type: 'audio',
-            isMissing: true
-          });
-        }
-      });
+       this.missingMusicFiles = []; // Reset
+       const existingMusicNames = new Set(this.resourceCategories.music.map(file => file.name));
+       this.expectedMusicFiles.forEach(musicFile => {
+         if (!existingMusicNames.has(musicFile)) {
+           this.missingMusicFiles.push({ name: musicFile, path: `/data/${this.storyTitle}/music/${musicFile}`, type: 'audio', isMissing: true });
+         }
+       });
     },
-    
     // 获取特定故事ID的缺失语音
-    getMissingAudioForStory(storyId) {
-      return this.missingAudioByStory[storyId] || [];
-    },
-    
+    getMissingAudioForStory(storyId) { return this.missingAudioByStory[storyId] || []; },
     // 获取特定故事ID的缺失背景图
-    getMissingBackgroundsForStory(storyId) {
-      return this.missingBackgroundsByStory[storyId] || [];
-    },
-    
+    getMissingBackgroundsForStory(storyId) { return this.missingBackgroundsByStory[storyId] || []; },
     // 处理点击缺失资源的事件
     handleMissingResourceClick(item) {
       this.showNotification(`资源 "${item.name}" 不存在，无法预览`, 'warning');
@@ -1395,131 +1118,92 @@ export default {
       this.loadingPreview = false;
     },
 
-    // selectResource and other methods remain the same as the previous version
+    // --- selectResource, stopAudio, handleAudioError, handleAudioEnded, releaseObjectUrls ---
+    // --- Methods remain IDENTICAL to the one provided in the previous step ---
     async selectResource(resource, type) {
+       if (!resource || !resource.path) return; // Guard against invalid resource
+      // If clicking the currently selected item and it's audio, toggle play/pause
       if (this.selectedResource && this.selectedResource.path === resource.path) {
            if (type === 'audio' && this.$refs.audioPlayer) {
-               if (this.$refs.audioPlayer.paused) {
-                   this.$refs.audioPlayer.play().catch(e => console.error("继续播放音频失败:", e));
-               } else {
-                   this.$refs.audioPlayer.pause();
-               }
+               try {
+                   if (this.$refs.audioPlayer.paused) { await this.$refs.audioPlayer.play(); }
+                   else { this.$refs.audioPlayer.pause(); }
+               } catch (e) { console.error("Play/Pause audio failed:", e); }
            }
            return;
       }
 
+      // Stop previous audio, clear old preview/URLs
       this.stopAudio();
-      this.releaseObjectUrls();
-      this.selectedResource = null;
+      this.releaseObjectUrls(); // Release only previous URLs
+      this.selectedResource = null; // Clear selection first
       this.previewUrl = null;
       this.previewError = false;
-      this.loadingPreview = true;
+      this.loadingPreview = true; // Set loading state
+
+      // Set new selection (important to do this after clearing)
       this.selectedResource = { ...resource, type };
       console.log('Selecting resource:', this.selectedResource);
 
       try {
-        const fileData = await readFile(resource.path);
-         if (fileData === undefined || fileData === null) {
-             throw new Error(`读取文件失败 (null/undefined)`);
-         }
+        const fileData = await readFile(resource.path); // Read file data
+         if (fileData === undefined || fileData === null) throw new Error(`File read returned null/undefined`);
+
         console.log(`File read successful for ${resource.name}, data type:`, fileData.constructor.name);
 
-        if (fileData instanceof Blob || fileData instanceof ArrayBuffer) {
-           const blob = fileData instanceof ArrayBuffer ? new Blob([fileData]) : fileData;
-           const url = URL.createObjectURL(blob);
-           this.previewUrl = url;
-           this.objectUrls[resource.path] = url;
-           console.log('Blob URL created:', url);
+        let blob;
+        if (fileData instanceof Blob) blob = fileData;
+        else if (fileData instanceof ArrayBuffer) blob = new Blob([fileData]);
+        else throw new Error(`Unsupported file data type: ${fileData.constructor.name}`);
 
-           if (type === 'audio') {
-               await this.$nextTick();
-               if (this.$refs.audioPlayer) {
-                    this.$refs.audioPlayer.load();
-                    this.$refs.audioPlayer.play().catch(e => {
-                         console.warn("音频自动播放失败:", e);
-                         this.showNotification('音频自动播放失败，请手动播放', 'warning');
-                         this.previewError = false;
-                    });
-               } else {
-                    console.error("Audio element ref not available after nextTick.");
-                    this.previewError = true;
-                    this.showNotification('无法获取音频播放器', 'error');
-               }
-           } else if (type === 'image') {
-               console.log('Image preview URL set.');
-           } else {
-               this.previewError = true;
-           }
-        } else {
-           console.warn(`读取的数据类型 (${fileData.constructor.name}) 无法创建 Blob URL.`);
-           this.previewError = true;
-           this.showNotification('无法预览此文件类型', 'warning');
+        const url = URL.createObjectURL(blob);
+        this.previewUrl = url;
+        this.objectUrls[resource.path] = url; // Store URL for later release
+        console.log('Blob URL created:', url);
+
+        // Handle audio playback after URL is set
+        if (type === 'audio') {
+           await this.$nextTick(); // Wait for DOM update
+           if (this.$refs.audioPlayer) {
+                this.$refs.audioPlayer.load(); // Ensure player loads new source
+                try {
+                    await this.$refs.audioPlayer.play(); // Attempt to play
+                } catch (e) {
+                    console.warn("Audio autoplay failed:", e);
+                }
+           } else { throw new Error("Audio player ref not found"); }
         }
+        // If image, URL is set, nothing more needed here.
+
       } catch (err) {
-        console.error(`选择或读取文件 ${resource.path} 失败:`, err);
+        console.error(`Select/Read/Preview failed for ${resource.path}:`, err);
         this.previewError = true;
         this.showNotification(`加载预览 "${resource.name}" 失败: ${err.message}`, 'error');
+         // Ensure URL is cleared on error
+         if (this.objectUrls[resource.path]) {
+             URL.revokeObjectURL(this.objectUrls[resource.path]);
+             delete this.objectUrls[resource.path];
+         }
+         this.previewUrl = null;
       } finally {
-         this.loadingPreview = false;
-         console.log('Preview loading finished.');
+         this.loadingPreview = false; // Clear loading state
       }
     },
+    stopAudio() { if (this.$refs.audioPlayer) { if (!this.$refs.audioPlayer.paused) { this.$refs.audioPlayer.pause(); } this.$refs.audioPlayer.removeAttribute('src'); this.$refs.audioPlayer.load(); } },
+    handleAudioError(e) { console.error('Audio playback error:', e); let msg = '音频播放失败'; const err = e.target.error; if (err) { /* ... error code mapping ... */ msg += `: ${err.code}`; } this.previewError = true; this.showNotification(msg, 'error'); this.stopAudio(); },
+    handleAudioEnded() { console.log('Audio playback ended'); },
+    releaseObjectUrls() { Object.values(this.objectUrls).forEach(url => URL.revokeObjectURL(url)); this.objectUrls = {}; },
 
-    stopAudio() {
-      console.log('Attempting to stop audio...');
-      if (this.$refs.audioPlayer) {
-          if (!this.$refs.audioPlayer.paused) {
-              this.$refs.audioPlayer.pause();
-          }
-           this.$refs.audioPlayer.removeAttribute('src');
-           this.$refs.audioPlayer.load();
-           console.log('Audio stopped and source cleared.');
-      }
-    },
-
-    handleAudioError(e) {
-        console.error('音频播放错误:', e);
-        const error = e.target.error;
-        let errorMessage = '音频播放失败';
-        if (error) {
-            switch (error.code) {
-                case MediaError.MEDIA_ERR_ABORTED: errorMessage += ': 中断'; break;
-                case MediaError.MEDIA_ERR_NETWORK: errorMessage += ': 网络错误'; break;
-                case MediaError.MEDIA_ERR_DECODE: errorMessage += ': 解码错误'; break;
-                case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED: errorMessage += ': 源不支持'; break;
-                default: errorMessage += ': 未知'; break;
-            }
-             console.error('MediaError code:', error.code, 'message:', error.message);
-        }
-        this.previewError = true;
-        this.showNotification(errorMessage, 'error');
-        this.stopAudio();
-    },
-
-    handleAudioEnded() {
-         console.log('音频播放结束');
-    },
-
-    releaseObjectUrls() {
-       console.log('Releasing object URLs...');
-       for (const path in this.objectUrls) {
-           if (this.objectUrls[path]) {
-               URL.revokeObjectURL(this.objectUrls[path]);
-               console.log('Revoked URL for:', path);
-           }
-       }
-       this.objectUrls = {};
-    },
-
+    // --- Use emit for notifications ---
     showNotification(message, type = 'info') {
-       if (!this._isDestroyed) {
-           this.$emit('show-message', { title: type, message: message});
-           console.log(`[ReadResources][${type.toUpperCase()}] ${message}`);
-       } else {
-           console.log(`[ReadResources][${type.toUpperCase()}][Destroyed] ${message}`);
-       }
+       // Check if component is mounted/not destroyed
+       // _isDestroyed is Vue 2, in Vue 3 you might use getCurrentInstance() check or similar flag
+       // For simplicity, just emit. If component is unmounted, emit might not reach parent listener.
+       this.$emit('show-message', { title: type, message: message});
+       console.log(`[ReadResources][${type.toUpperCase()}] ${message}`);
     },
 
+    // --- Emit close event ---
     close() {
       this.$emit('close');
     }
@@ -1528,576 +1212,369 @@ export default {
 </script>
 
 <style scoped>
-/* 更新的样式支持亮色和深色模式 */
+/* Overall container styling */
 .resource-viewer {
-  padding: 20px;
-  font-family: 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  color: var(--text-primary);
-  background-color: var(--content-bg);
-  height: 100%;
+  /* background-color: var(--surface-color); */ /* Let parent modal handle background */
+  padding: 0; /* Remove padding, handled by layout container or modal body */
+  height: 100%; /* Fill parent modal body */
+  box-sizing: border-box;
+  display: flex; /* Enable flex for loading/error states */
+  flex-direction: column;
+}
+
+/* Loading and Error States */
+.loading-indicator, .error-state {
+  flex-grow: 1; /* Take up all space when shown */
   display: flex;
   flex-direction: column;
-  border-radius: 12px;
-  transition: all 0.3s ease;
-}
-
-.loading-indicator, .error-state, .empty-state {
+  align-items: center;
+  justify-content: center;
   text-align: center;
-  padding: 20px;
-  color: var(--text-secondary);
-  border-radius: 8px;
-  background-color: var(--sidebar-bg);
-  margin: 10px 0;
-}
-
-.loading-indicator.small, .error-state.small, .preview-placeholder.small {
-  padding: 10px;
-  font-size: 0.9em;
+  padding: 40px 20px;
   color: var(--text-secondary);
 }
-
-.resource-content {
-  display: grid;
-  grid-template-columns: 1.5fr 1fr;
-  gap: 30px;
-  flex-grow: 1;
-  overflow: hidden;
+.loading-indicator.full-height, .error-state.full-height {
+    height: 100%; /* Ensure it fills the container */
+}
+.loading-indicator.small, .error-state.small {
+    min-height: 80px; /* Smaller height for preview area */
+    padding: 15px;
+    font-size: 0.9rem;
 }
 
-.resource-list-area {
-  overflow-y: auto;
-  padding-right: 15px;
-  scrollbar-width: thin;
-  scrollbar-color: var(--text-secondary) var(--sidebar-bg);
-}
-
-/* 美化滚动条 */
-.resource-list-area::-webkit-scrollbar {
-  width: 6px;
-}
-
-.resource-list-area::-webkit-scrollbar-track {
-  background: var(--sidebar-bg);
-  border-radius: 10px;
-}
-
-.resource-list-area::-webkit-scrollbar-thumb {
-  background-color: var(--text-secondary);
-  border-radius: 10px;
-}
-
-.resource-category {
-  margin-bottom: 25px;
-  padding-bottom: 15px;
-  border-bottom: 1px solid var(--border-color);
-  transition: all 0.3s ease;
-}
-
-.resource-category:last-child {
-  border-bottom: none;
-  margin-bottom: 0;
-}
-
-.resource-category h3 {
-  font-size: 18px;
-  font-weight: 600;
+.loading-icon-fa, .error-icon-fa {
+  font-size: 2rem;
+  margin-bottom: 15px;
   color: var(--primary-color);
-  margin-top: 0;
-  margin-bottom: 15px;
-  padding-bottom: 8px;
-  border-bottom: 2px solid var(--primary-color);
-  display: inline-block;
 }
+.error-icon-fa { color: var(--danger-color); }
+.loading-icon-fa.large, .error-icon-fa.large { font-size: 2.5rem; }
 
-.voice-folder {
-  margin-bottom: 15px;
-  padding: 15px;
-  background-color: var(--sidebar-bg);
-  border-radius: 10px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-  transition: all 0.3s ease;
-}
-
-.voice-folder.sub-folder {
-  margin-top: 10px;
-  margin-bottom: 5px;
-  padding: 12px;
-  background-color: var(--content-bg);
-  border: 1px dashed var(--border-color);
-  border-radius: 8px;
-}
-
-.voice-folder h4 {
-  font-size: 16px;
-  font-weight: 500;
-  color: var(--text-primary);
-  margin-top: 0;
-  margin-bottom: 12px;
-  padding-bottom: 8px;
-  border-bottom: 1px dashed var(--border-color);
+/* New Layout Container */
+.resource-layout-container {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  flex-grow: 1; /* Fill remaining space */
+  gap: 15px; /* Space between list and preview */
+  overflow: hidden; /* Prevent container itself from scrolling */
+  height: 100%; /* Crucial for child height % */
 }
 
-.voice-folder h5 {
-  font-size: 14px;
+/* Resource List Area (Left Panel) */
+.resource-list-area {
+  /* Inherit .card styles */
+  flex: 0 0 350px; /* Fixed width, adjust as needed */
+  min-width: 280px; /* Minimum width */
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto; /* Enable vertical scrolling ONLY for this area */
+   padding: 15px; /* Add padding inside the list area */
+   box-sizing: border-box;
+   border-right: 1px solid var(--border-color); /* Optional separator */
+   height:400px;
+}
+
+
+.empty-state { /* Styles for empty list */
+   padding: 20px;
+   text-align: center;
+   color: var(--text-tertiary);
+}
+.empty-icon-fa.medium { font-size: 2rem; margin-bottom: 10px; }
+.text-muted { color: var(--text-tertiary); font-size: 0.85rem; }
+
+
+/* Resource Categories and Folders */
+.resource-category {
+  margin-bottom: 20px;
+}
+.category-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 10px 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.category-title .svg-inline--fa {
+    color: var(--primary-color); /* Icon color for category titles */
+}
+.category-title .btn-action {
+    margin-left: auto; /* Push button to the right */
+}
+
+
+.resource-folder {
+  margin-bottom: 15px;
+  padding-left: 10px; /* Indent folders */
+}
+.folder-title {
+  font-size: 1rem;
   font-weight: 500;
   color: var(--text-secondary);
-  margin-top: 0;
-  margin-bottom: 10px;
-  padding-bottom: 6px;
-  border-bottom: 1px dotted var(--border-color);
+  margin: 0 0 8px 0;
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: 6px;
+}
+.folder-title .svg-inline--fa {
+    color: var(--text-tertiary);
+}
+.folder-title.missing {
+    color: var(--danger-color);
+}
+.folder-title.missing .svg-inline--fa {
+    color: var(--danger-color);
+}
+.folder-title .btn-action {
+    margin-left: auto;
 }
 
+.sub-folder {
+    margin-left: 15px;
+    margin-top: 10px;
+    padding-left: 10px;
+    border-left: 2px solid var(--hover-overlay);
+}
+.sub-folder-title {
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: var(--text-tertiary);
+    margin-bottom: 5px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+
+/* Resource Items List */
 .resource-items {
   list-style: none;
   padding: 0;
   margin: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 10px;
 }
 
-.resource-items li {
+.resource-item {
   display: flex;
   align-items: center;
-  padding: 10px 12px;
-  background-color: var(--content-bg);
-  border-radius: 8px;
+  padding: 8px 10px;
+  margin-bottom: 4px; /* Spacing between items */
+  border-radius: var(--border-radius-sm);
   cursor: pointer;
-  transition: all 0.2s ease;
-  border: 1px solid var(--border-color);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-  position: relative;
+  transition: background-color 0.2s ease, color 0.2s ease;
+  gap: 8px;
+  overflow: hidden; /* Prevent long text overflow */
 }
-
-.resource-items li:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-  background-color: var(--hover-bg);
+.resource-item:hover {
+  background-color: var(--hover-overlay);
 }
-
-.resource-items li.selected {
-  background-color: var(--primary-color);
+.resource-item.selected {
+  background-color: var(--primary-light);
   color: white;
-  border-color: var(--primary-color);
   font-weight: 500;
-  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
 }
+.resource-item.selected .resource-icon {
+  color: white;
+}
+.resource-item.selected .missing-tag {
+    background-color: rgba(255, 255, 255, 0.2);
+    color: white;
+}
+
 
 .resource-icon {
-  margin-right: 10px;
-  font-size: 16px;
+  flex-shrink: 0;
+  width: 1.1em; /* Consistent icon width */
+  text-align: center;
   color: var(--text-secondary);
-  transition: all 0.2s ease;
 }
+.audio-icon { color: var(--info-color); }
+.image-icon { color: var(--secondary-color); }
+.music-icon { color: var(--warning-color); }
 
-.resource-items li.selected .resource-icon {
-  color: white;
-}
 
-.resource-items li span {
-  white-space: normal;
-  overflow: visible;
-  text-overflow: clip;
+.item-label {
   flex-grow: 1;
-  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 0.9rem;
 }
 
+/* Missing Resource Styling */
+.missing-resource {
+  color: var(--text-tertiary);
+  font-style: italic;
+  cursor: default; /* Indicate not selectable for normal preview */
+  position: relative; /* For button positioning */
+}
+.missing-resource:hover {
+    background-color: transparent; /* Don't highlight on hover */
+}
+.missing-resource.selected {
+  background-color: transparent; /* Don't highlight missing when 'selected' */
+  color: var(--text-tertiary); /* Keep text color */
+}
+
+.missing-icon {
+    color: var(--danger-color);
+    opacity: 0.6;
+}
+.missing-icon.faded {
+    opacity: 0.4;
+}
+.missing-icon.generating {
+    opacity: 1;
+    color: var(--warning-color); /* Indicate generating */
+}
+
+.missing-tag {
+  font-size: 0.75rem;
+  font-weight: bold;
+  color: var(--danger-light);
+  margin-left: 5px;
+  background-color: rgba(var(--danger-color-rgb, 231, 76, 60), 0.1);
+  padding: 1px 4px;
+  border-radius: var(--border-radius-sm);
+}
+
+.missing-resource .btn-action {
+    margin-left: auto; /* Push button to the right */
+    flex-shrink: 0;
+}
+
+
+/* Resource Preview Area (Right Panel) */
 .resource-preview-area {
-  overflow-y: auto;
-  padding: 25px;
-  background-color: var(--sidebar-bg);
-  border-radius: 12px;
+  /* Inherit .card styles */
+  flex: 1; /* Take remaining space */
   display: flex;
   flex-direction: column;
-  align-items: center;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  transition: all 0.3s ease;
+  height: 100%; /* Fill the vertical space */
+  overflow: hidden; /* Prevent preview area from getting its own scrollbar */
+   padding: 15px;
+   box-sizing: border-box;
 }
 
 .preview-placeholder {
+  flex-grow: 1; /* Fill space when no selection */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   text-align: center;
-  color: var(--text-secondary);
-  padding: 40px;
-  border: 2px dashed var(--border-color);
-  border-radius: 10px;
-  width: 100%;
-  margin-top: 20px;
+  color: var(--text-tertiary);
+}
+.preview-placeholder .placeholder-icon {
+    font-size: 2.5rem;
+    margin-bottom: 15px;
 }
 
 .preview-content {
-  width: 100%;
-  max-width: 600px;
-  text-align: center;
+  display: flex;
+  flex-direction: column;
+  height: 100%; /* Ensure content fills the area */
 }
 
-.preview-content h4 {
-  font-size: 18px;
+.preview-title {
+  font-size: 1.1rem;
   font-weight: 600;
-  margin-top: 0;
-  margin-bottom: 20px;
   color: var(--text-primary);
-  word-break: break-word;
-  position: relative;
-  display: inline-block;
-}
-
-.preview-content h4:after {
-  content: '';
-  position: absolute;
-  width: 50%;
-  height: 2px;
-  background-color: var(--primary-color);
-  bottom: -8px;
-  left: 25%;
+  margin: 0 0 15px 0;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0; /* Prevent shrinking */
 }
 
 .preview-container {
-  width: 100%;
-  overflow: hidden;
+  flex-grow: 1; /* Allow container to fill space */
   display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  background-color: var(--content-bg);
-  border-radius: 10px;
-  box-shadow: var(--shadow);
-  min-height: 150px;
-  padding: 20px;
-  transition: all 0.3s ease;
+  align-items: center; /* Center content vertically */
+  justify-content: center; /* Center content horizontally */
+  overflow-y: auto; /* Enable scroll ONLY if preview content overflows */
+  position: relative; /* For loading indicator */
+  min-height: 100px; /* Ensure some minimum height */
 }
 
 .preview-image {
   max-width: 100%;
-  max-height: 70vh;
+  max-height: 100%;
   object-fit: contain;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  border-radius: var(--border-radius-md);
 }
 
 .audio-preview {
   width: 100%;
-  padding: 15px;
-  background-color: var(--hover-bg);
-  border-radius: 8px;
 }
-
 .audio-preview audio {
   width: 100%;
-  display: block;
-  border-radius: 8px;
+  height: 45px;
 }
 
-/* 缺失资源的特殊样式 */
-.missing-resource {
-  background-color: var(--content-bg) !important;
-  border: 1px dashed #ff6b6b !important;
-  opacity: 0.8;
-  position: relative;
+/* Selection Dialog Styles */
+.modal { /* Reusing name from Manage.vue */
+  position: fixed; inset: 0; background-color: rgba(0,0,0,0.6);
+  display: flex; justify-content: center; align-items: center;
+  z-index: 1150; /* Above resource viewer modal */
+  padding: 15px;
 }
-
-.missing-resource:hover {
-  opacity: 1;
-  border-color: #ff4757 !important;
-  background-color: rgba(255, 107, 107, 0.1) !important;
+.modal-content.selection-dialog {
+   width: 100%;
+   max-width: 500px; /* Limit width for selection */
+   max-height: 80vh;
+   display: flex; flex-direction: column;
+   overflow: hidden;
+   padding: 0; /* Use header/body/footer padding */
 }
+.modal-header { padding: 15px 20px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
+.modal-title { font-size: 1.2rem; margin: 0; font-weight: 600;}
+.modal-body { padding: 20px; overflow-y: auto; flex-grow: 1; }
+.modal-footer { padding: 15px 20px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 10px; flex-shrink: 0; }
+.close-btn { /* Uses .btn .btn-text .btn-sm */ color: var(--text-secondary); }
+.close-btn:hover { color: var(--danger-color); }
 
-.missing-icon {
-  color: #ff6b6b !important;
-}
 
-.missing-label {
-  font-size: 0.85em;
-  color: #ff6b6b;
-  font-style: italic;
-  margin-left: 5px;
-  font-weight: 500;
-}
-
-.missing-folder {
-  border: 1px dashed #ff6b6b;
-  background-color: rgba(255, 107, 107, 0.05);
-}
-
-.missing-section-label {
-  font-size: 0.85em;
-  color: #ff6b6b;
-  font-style: italic;
-  margin-left: 5px;
-}
-
-/* 新增：重新生成按钮和补齐资源按钮样式 */
-.btn-regenerate, .btn-complete {
-  background-color: var(--primary-color);
-  color: white;
-  border: none;
-  border-radius: 6px;
-  padding: 4px 10px;
-  font-size: 0.85em;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  white-space: nowrap;
-}
-
-.btn-regenerate {
-  background-color: var(--primary-color);
-}
-
-.btn-complete {
-  background-color: #4CAF50;
-  position: absolute;
-  right: 8px;
-  top: 50%;
-  transform: translateY(-50%);
-}
-
-.btn-regenerate:hover, .btn-complete:hover {
-  filter: brightness(1.1);
-  transform: translateY(-1px);
-}
-
-.btn-regenerate:disabled, .btn-complete:disabled {
-  background-color: #cccccc;
-  cursor: not-allowed;
-  opacity: 0.7;
-}
-
-/* 新增：对话框样式 */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-}
-
-.modal-dialog {
-  width: 90%;
-  max-width: 500px;
-  background-color: var(--content-bg);
-  border-radius: 10px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-.modal-header {
-  padding: 15px 20px;
-  border-bottom: 1px solid var(--border-color);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.modal-header h3 {
-  margin: 0;
-  color: var(--text-primary);
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  font-size: 24px;
-  cursor: pointer;
-  color: var(--text-primary);
-}
-
-.modal-body {
-  padding: 20px;
-  max-height: 50vh;
-  overflow-y: auto;
-}
-
-.modal-footer {
-  padding: 15px 20px;
-  border-top: 1px solid var(--border-color);
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-}
-
-.btn-cancel, .btn-confirm {
-  padding: 8px 16px;
-  border-radius: 6px;
-  border: none;
-  cursor: pointer;
-}
-
-.btn-cancel {
-  background-color: var(--sidebar-bg);
-  color: var(--text-primary);
-}
-
-.btn-confirm {
-  background-color: var(--primary-color);
-  color: white;
-}
-
-.btn-confirm:disabled {
-  background-color: #cccccc;
-  cursor: not-allowed;
-}
-
-/* 选择选项样式 */
 .selection-options {
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
 }
-
 .select-all-container {
-  display: flex;
-  align-items: center;
-  margin-bottom: 10px;
-  cursor: pointer;
-  user-select: none;
+    font-weight: 500;
+    padding-bottom: 10px;
+    /* border-bottom: 1px solid var(--border-color); */
+}
+.options-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); /* Responsive columns */
+    gap: 10px;
+}
+.option-item {
+    /* Uses global .checkbox-label */
+    padding: 5px 0; /* Add some padding */
 }
 
-.character-options {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 10px;
+
+/* Thin separator */
+.separator.thin-separator {
+    margin: 10px 0;
 }
 
-.character-options label {
-  display: flex;
-  align-items: center;
-  padding: 8px;
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  cursor: pointer;
-  user-select: none;
+/* Global styles used */
+.btn-xs { /* Define extra small button if not global */
+    padding: 3px 6px;
+    font-size: 0.75rem;
 }
 
-.character-options label:hover {
-  background-color: var(--hover-bg);
+/* Ensure FontAwesome icons are used if fas classes are present */
+.fa-spinner { /* Placeholder if FontAwesome component isn't used */
+    display: inline-block;
+    animation: fa-spin 1s linear infinite;
 }
+@keyframes fa-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-/* 响应式设计优化 */
-@media (max-width: 768px) {
-  .resource-content {
-    grid-template-columns: 1fr;
-    gap: 20px;
-  }
+/* Ensure global card, btn, input, select, switch, checkbox styles are available */
 
-  .resource-list-area, .resource-preview-area {
-    padding-right: 0;
-    overflow-y: visible;
-    max-height: none;
-  }
-
-  .resource-preview-area {
-    padding: 15px;
-  }
-
-  .resource-category h3 { 
-    font-size: 16px; 
-  }
-  
-  .voice-folder h4 { 
-    font-size: 15px; 
-  }
-  
-  .voice-folder h5 { 
-    font-size: 13px; 
-  }
-  
-  .resource-items li { 
-    font-size: 14px; 
-    padding: 10px; 
-  }
-  
-  .resource-icon { 
-    font-size: 16px; 
-  }
-  
-  .preview-content h4 { 
-    font-size: 15px; 
-  }
-  
-  .preview-container { 
-    max-height: 300px; 
-  }
-
-  .resource-items {
-    grid-template-columns: 1fr;
-  }
-  
-  .modal-dialog {
-    width: 95%;
-  }
-  
-  .character-options {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* 资源项目的动画效果 */
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.resource-items li {
-  animation: fadeIn 0.3s ease-out forwards;
-}
-
-/* 改进的暗色模式支持 */
-.dark-theme .resource-viewer {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-}
-
-.dark-theme .resource-items li {
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
-}
-
-.dark-theme .resource-items li:hover {
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
-}
-
-.dark-theme .preview-container {
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
-}
-
-.dark-theme .preview-image {
-  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.25);
-}
-
-/* 暗色模式下缺失资源的样式调整 */
-.dark-theme .missing-resource {
-  border-color: #ff6b6b !important;
-}
-
-.dark-theme .missing-resource:hover {
-  background-color: rgba(255, 107, 107, 0.15) !important;
-}
-
-.dark-theme .missing-folder {
-  background-color: rgba(255, 107, 107, 0.08);
-}
-
-/* 暗色模式下对话框样式调整 */
-.dark-theme .modal-dialog {
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
-}
 </style>

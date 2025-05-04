@@ -12,7 +12,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue';
 import * as idbFs from './components/services/IndexedDBFileSystem'; // Adjust path if needed
-import { useApiEndpoints } from './components/services/useApiEndpoints'; // Adjust path if needed
+import { useApiEndpoints } from './components/services/useStoryContinue'; // Adjust path if needed
 
 // --- Reactive State ---
 const status = ref('Initializing...'); // Overall status for UI display

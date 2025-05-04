@@ -5,7 +5,7 @@ import { continueStory, endStory } from './StoryGenerator.js';
 import { getChoice, mergeStory, getChoiceId } from './ChoiceManager.js';
 import { generateVoice } from './voiceGenerator.js';
 import { getPlacesImagesJS } from './ImageGenerationService.js';
-import { generateEndMusic, gettoken } from './aimusicService.js';
+import { generateEndMusic} from './aimusicService.js';
 
 // Helper function similar to the one in useStoryGenerator
 function loadConfig() {

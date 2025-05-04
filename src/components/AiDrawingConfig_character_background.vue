@@ -1,45 +1,36 @@
 <template>
   <div class="character-background-settings">
     <div class="tabs-container">
+      <!-- Use button elements for better accessibility and styling -->
       <div class="tabs">
-        <div 
-          v-for="(tab, index) in tabs" 
-          :key="index" 
-          :class="['tab', { active: activeTabIndex === index }]"
+        <button
+          v-for="(tab, index) in tabs"
+          :key="index"
+          :class="['tab-button', { active: activeTabIndex === index }]"
           @click="activeTabIndex = index"
         >
+           <!-- Add icons for visual appeal -->
+          <font-awesome-icon :icon="getTabIcon(index)" class="tab-icon" />
           <span class="tab-name">{{ tab.name }}</span>
-        </div>
+        </button>
       </div>
-      
-      <div class="tab-content">
-        <!-- 人物绘画配置区 -->
-        <div v-if="activeTabIndex === 0" class="character-tab">
-          <CharacterTabContent 
-            @show-message="showMessageBubble"
-          />
+
+      <div class="tab-content card">
+        <!-- Keep v-if for conditional rendering -->
+        <div v-if="activeTabIndex === 0">
+          <CharacterTabContent @show-message="showMessageBubble" />
         </div>
-        
-        <!-- 背景绘画配置区 -->
-        <div v-if="activeTabIndex === 1" class="background-tab">
-          <BackgroundTabContent 
-            @show-message="showMessageBubble"
-          />
+        <div v-if="activeTabIndex === 1">
+          <BackgroundTabContent @show-message="showMessageBubble" />
         </div>
-        
-        <!-- 判断生成质量 -->
-        <div v-if="activeTabIndex === 2" class="judging-tab">
-          <JudgingTabContent 
+        <div v-if="activeTabIndex === 2">
+          <JudgingTabContent
             @open-quality-checker="openJudgingTestWindow"
             @show-message="showMessageBubble"
           />
         </div>
-        
-        <!-- 后处理 -->
-        <div v-if="activeTabIndex === 3" class="processing-tab">
-          <ProcessingTabContent 
-            @show-message="showMessageBubble"
-          />
+        <div v-if="activeTabIndex === 3">
+          <ProcessingTabContent @show-message="showMessageBubble" />
         </div>
       </div>
     </div>
@@ -47,14 +38,17 @@
 </template>
 
 <script>
+// --- Script remains unchanged ---
 import { useToast } from 'vue-toastification';
-
-const toast = useToast(); // 获取全局 toast 实例
-
+const toast = useToast();
 import CharacterTabContent from './AiDrawingConfig_CharacterTabContent.vue'
 import BackgroundTabContent from './AiDrawingConfig_BackgroundTabContent.vue'
 import ProcessingTabContent from './AiDrawingConfig_ProcessingTabContent.vue'
 import JudgingTabContent from './AiDrawingConfig_JudgingTabContent.vue'
+// Assume icons are registered globally or import them here
+// Example icons: user, image, check-double, magic
+// import { faUser, faImage, faCheckDouble, faMagic } from '@fortawesome/free-solid-svg-icons';
+// library.add(faUser, faImage, faCheckDouble, faMagic);
 
 export default {
   name: 'CharacterBackgroundSettings',
@@ -63,36 +57,43 @@ export default {
     BackgroundTabContent,
     ProcessingTabContent,
     JudgingTabContent
+    // FontAwesomeIcon // If needed
   },
   data() {
     return {
-      activeTabIndex: 0, // Default to judging tab for testing
+      activeTabIndex: 0,
       tabs: [
-        { name: "人物绘画配置区" },
-        { name: "背景绘画配置区" },
-        { name: "判断生成质量" },
-        { name: "后处理" }
+        { name: "人物绘画", icon: ['fas', 'user'] }, // Add icon data
+        { name: "背景绘画", icon: ['fas', 'image'] },
+        { name: "质量判断", icon: ['fas', 'check-double'] },
+        { name: "后处理", icon: ['fas', 'magic'] }
       ]
     }
   },
   methods: {
+    getTabIcon(index) {
+        // Helper to get icon array for font-awesome component
+        return this.tabs[index]?.icon || ['fas', 'question-circle']; // Default icon
+    },
     close() {
       this.$emit('close');
     },
-    
-    // 打开测试窗口
     openJudgingTestWindow() {
-      this.$emit('open-quality-checker');
+      // This component is likely inside a modal, emitting 'close' might be better
+      // Or emit a specific event for the parent to handle window opening
+      console.warn("Opening quality checker window from here might not be ideal if inside modal.");
+      // Re-emit or handle differently if needed
+       this.$emit('open-quality-checker');
     },
-    
-    // 显示消息气泡
     showMessageBubble(arg) {
+      // Use global toastification via $emit in child components is preferred
+      // This method is kept if children directly call it via prop/ref (less ideal)
       if (arg.title === 'success'){
         toast.success(arg.message);
       } else if (arg.title === 'error'){
         toast.error(arg.message);
       } else {
-        toast.warning(arg.message);
+        toast.info(arg.message); // Use info for warnings or general messages
       }
     }
   }
@@ -101,107 +102,76 @@ export default {
 
 <style scoped>
 .character-background-settings {
+  /* Container takes full width/height available in the modal body */
   width: 100%;
-  height: 100%;
-  background-color: var(--content-bg);
-  border-radius: 12px;
-  box-shadow: var(--shadow);
-  display: flex;
-  flex-direction: column;
-  color: var(--text-primary);
-  transition: all var(--transition-speed);
-}
-
-.close-button {
-  background: none;
-  border: none;
-  font-size: 1.5rem;
-  cursor: pointer;
-  color: var(--text-secondary);
-  transition: color var(--transition-speed);
-}
-
-.close-button:hover {
-  color: var(--primary-color);
 }
 
 .tabs-container {
   display: flex;
   flex-direction: column;
-  flex: 1;
-  height: 100%;
 }
 
 .tabs {
   display: flex;
   border-bottom: 1px solid var(--border-color);
-  background-color: var(--sidebar-bg);
-  border-top-left-radius: 12px;
-  border-top-right-radius: 12px;
+  margin-bottom: -1px; /* Overlap border with card's top border */
+  flex-wrap: nowrap; /* Prevent wrapping */
+  overflow-x: auto; /* Allow horizontal scroll on small screens */
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+.tabs::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
 }
 
-.tab {
-  padding: 14px 20px;
+
+.tab-button {
+  padding: 12px 18px;
   cursor: pointer;
-  border-bottom: 2px solid transparent;
-  transition: all var(--transition-speed);
-  position: relative;
+  border: none;
+  background-color: transparent;
   color: var(--text-secondary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.tab-name {
-  font-weight: 500;
   font-size: 0.95rem;
+  font-weight: 500;
+  transition: all var(--transition-speed);
+  border-bottom: 3px solid transparent;
+  margin-bottom: -1px; /* Align border with container's border */
+  display: inline-flex; /* Use inline-flex */
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap; /* Prevent wrapping within button */
 }
 
-.tab:hover {
-  background-color: var(--hover-bg);
+.tab-button:hover {
   color: var(--text-primary);
+  background-color: var(--hover-overlay);
 }
 
-.tab.active {
-  border-bottom: 2px solid var(--primary-color);
-  font-weight: 600;
+.tab-button.active {
   color: var(--primary-color);
+  border-bottom-color: var(--primary-color);
+  background-color: var(--surface-color); /* Match card background */
+   /* Add slight top radius to blend with card */
+  border-top-left-radius: var(--border-radius-md);
+  border-top-right-radius: var(--border-radius-md);
 }
 
-.tab.active::after {
-  content: '';
-  position: absolute;
-  bottom: -2px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 30px;
-  height: 2px;
-  background-color: var(--primary-color);
-  border-radius: 2px;
+.tab-icon {
+  font-size: 1em; /* Adjust icon size relative to text */
 }
 
 .tab-content {
-  flex: 1;
+  /* uses .card style from parent modal */
   padding: 20px;
-  overflow: auto;
-  background-color: var(--content-bg);
-  border-bottom-left-radius: 12px;
-  border-bottom-right-radius: 12px;
+  border-top-left-radius: 0; /* Remove top-left radius if first tab isn't active */
+  /* Add min-height if needed */
+  /* min-height: 400px; */
 }
 
-/* Media queries for responsiveness */
-@media (max-width: 768px) {
-  .tabs {
-    overflow-x: auto;
-    white-space: nowrap;
-  }
-  
-  .tab {
-    padding: 12px 16px;
-  }
-  
-  .tab-name {
-    font-size: 0.85rem;
-  }
+/* Adjust radius based on active tab */
+.tabs-container .tab-button:first-child.active ~ .tab-content {
+   border-top-left-radius: 0;
 }
+/* If other tabs can be active first, similar rules might be needed */
+
 </style>

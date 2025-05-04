@@ -229,7 +229,9 @@ async function gpt(system, prompt, kind, id) {
     pendingDestruction.add(id);
     return "error";
   }
-  
+  if(!prompt){
+    prompt="   ";
+  }
   // 构建请求
   const data = {
     model: selectedModel.model,

@@ -6,7 +6,7 @@ import { beginStory, continueStory, endStory } from './StoryGenerator.js'; // As
 import { getChoice, mergeStory, getChoiceId } from './ChoiceManager.js'; // Assuming unused getChoiceId for Start.vue
 import { generateVoice } from './voiceGenerator.js';
 import { getAllPersonsImagesJS, getPlacesImagesJS, getTitleImagesJS } from './ImageGenerationService.js'; // Renamed exports used
-import {gettoken, generateBackgroundMusic, generateEndMusic } from './aimusicService.js'; // Assuming unused endMusic for Start.vue
+import { generateBackgroundMusic, generateEndMusic } from './aimusicService.js'; // Assuming unused endMusic for Start.vue
 
 // Helper to load config from localStorage
 function loadConfig() {

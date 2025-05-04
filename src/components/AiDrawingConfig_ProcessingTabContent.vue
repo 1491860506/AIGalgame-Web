@@ -1,148 +1,159 @@
 <template>
-  <div class="main-container">
+  <div class="tab-content-container processing-tab-content">
     <div class="title-frame">
-      <h3 class="title-label">AI绘画后处理设置</h3>
-      <span class="subtitle-label">配置图像处理选项和自动调整参数</span>
+      <h3 class="title-label">AI 绘画后处理设置</h3>
+      <span class="subtitle-label">配置图像背景移除 (rembg) 和分辨率自动调整参数。</span>
     </div>
 
-    <div class="separator"></div>
+    <hr class="separator thin-separator">
 
     <!-- rembg配置区域 -->
-    <div class="section-frame">
+    <div class="section-frame card">
       <h4 class="section-title">背景去除设置 (rembg)</h4>
 
-      <div class="input-row">
-        <label class="input-label">rembg地址:</label>
-        <input
-          type="text"
-          v-model="rembgLocation"
-          class="input-field"
-          @focus="clearSelection"
-        />
+      <div class="form-grid rembg-grid">
+         <div class="form-group grid-span-2">
+            <label for="rembg-location" class="form-label">rembg 服务地址:</label>
+            <input
+              id="rembg-location"
+              type="text"
+              v-model="rembgLocation"
+              class="input"
+              placeholder="例如: http://localhost:7000/api/remove"
+              @focus="clearSelection"
+            />
+         </div>
+
+         <div class="form-group">
+            <label for="rembg-model-select" class="form-label">rembg 模型:</label>
+            <select
+               id="rembg-model-select"
+              v-model="rembgModel"
+              class="select"
+              @focus="loadRembgModels"
+            >
+               <option v-if="rembgModels.length === 0" value="" disabled>-- 无可用模型 --</option>
+              <option v-for="model in rembgModels" :key="model" :value="model">{{ model }}</option>
+            </select>
+         </div>
+
+        <!-- 模型导入功能 -->
+        <div class="form-group model-import-group">
+          <label class="form-label">上传新模型 (.onnx):</label>
+          <div class="file-upload-wrapper">
+              <label for="model-file-input" class="btn btn-outline btn-sm file-input-label">
+                  <font-awesome-icon :icon="['fas', 'folder-open']" />
+                  {{ modelFile ? modelFile.name : '选择文件...' }}
+              </label>
+              <input
+                type="file"
+                accept=".onnx"
+                id="model-file-input"
+                ref="modelFileInput"
+                class="hidden-file-input"
+                @change="handleModelFileChange"
+              />
+            <button class="btn btn-secondary btn-sm" @click="uploadModel" :disabled="!modelFile || uploadStatus === '正在上传...'">
+              <font-awesome-icon :icon="['fas', 'upload']" /> 上传
+            </button>
+          </div>
+           <div v-if="uploadStatus" class="upload-status" :class="{'upload-success': uploadSuccess, 'upload-error': !uploadSuccess}">
+              <font-awesome-icon :icon="['fas', uploadSuccess ? 'check-circle' : 'times-circle']" />
+              {{ uploadStatus }}
+           </div>
+        </div>
       </div>
 
-      <div class="input-row">
-        <label class="input-label">rembg模型:</label>
-        <select
-          v-model="rembgModel"
-          class="input-field"
-          @focus="loadRembgModels"
-        >
-          <option v-for="model in rembgModels" :key="model" :value="model">{{ model }}</option>
-        </select>
-      </div>
-      
-      <!-- 添加的模型导入功能 -->
-      <div class="input-row">
-        <label class="input-label">导入模型:</label>
-        <input
-          type="file"
-          accept=".onnx"
-          ref="modelFileInput"
-          class="file-input"
-          @change="handleModelFileChange"
-        />
-        <button class="upload-button" @click="uploadModel" :disabled="!modelFile">
-          上传模型
-        </button>
-      </div>
-      
-      <div v-if="uploadStatus" class="upload-status" :class="{'upload-success': uploadSuccess, 'upload-error': !uploadSuccess}">
-        {{ uploadStatus }}
-      </div>
-
-      <div class="button-row">
-        <button class="save-button" @click="saveProcessingConfig">
-          💾 保存Rembg设置
+      <div class="button-frame single-button">
+        <button class="btn btn-secondary" @click="saveProcessingConfig">
+          <font-awesome-icon :icon="['fas', 'save']" /> 保存 Rembg 设置
         </button>
       </div>
     </div>
 
     <!-- 分辨率调整设置区域 -->
-    <div class="section-frame">
+    <div class="section-frame card">
       <h4 class="section-title">分辨率调整设置</h4>
 
       <!-- 人物分辨率调整 -->
-      <div class="section-container">
-        <div class="toggle-row">
-          <div class="toggle-container">
-            <input
-              type="checkbox"
-              v-model="characterResolution"
-              class="toggle"
-              @change="saveProcessingConfig"
-            />
-            <div class="toggle-slider"></div>
-          </div>
-          <label class="toggle-label1">启用人物绘画分辨率调整</label>
-        </div>
+      <div class="resolution-section">
+         <div class="toggle-row">
+           <div class="switch-container">
+             <div class="switch">
+               <input type="checkbox" id="char-res-switch" v-model="characterResolution" @change="saveProcessingConfig" />
+               <label for="char-res-switch" class="switch-slider"></label>
+             </div>
+             <label for="char-res-switch" class="switch-label label-bold">启用人物绘画分辨率调整</label>
+           </div>
+         </div>
 
         <div v-if="characterResolution" class="settings-container">
-          <div class="grid-container">
-            <div class="grid-row">
-              <label class="grid-label">宽度:</label>
+          <div class="form-grid resolution-grid">
+            <div class="form-group">
+              <label for="char-width-input" class="form-label">目标宽度 (px):</label>
               <input
+                id="char-width-input"
                 type="number"
                 v-model.number="characterWidth"
-                class="size-input"
-                min="1"
+                class="input size-input"
+                min="1" max="4096"
                 @blur="validateAndSave('width')"
                 @keyup.enter="validateAndSave('width')"
-              >
-
-              <label class="grid-label ml-15">高度:</label>
-              <input
-                type="number"
-                v-model.number="characterHeight"
-                class="size-input"
-                min="1"
-                @blur="validateAndSave('height')"
-                @keyup.enter="validateAndSave('height')"
-              >
+              />
             </div>
 
-            <div class="grid-row">
-              <label class="grid-label">非指定比例方案:</label>
-              <select v-model="characterResize" class="medium-select" @change="saveProcessingConfig">
-                <option value="裁剪">裁剪</option>
-                <option value="填充">填充</option>
-                <option value="拉伸">拉伸</option>
+             <div class="form-group">
+                <label for="char-height-input" class="form-label">目标高度 (px):</label>
+                <input
+                  id="char-height-input"
+                  type="number"
+                  v-model.number="characterHeight"
+                  class="input size-input"
+                  min="1" max="4096"
+                  @blur="validateAndSave('height')"
+                  @keyup.enter="validateAndSave('height')"
+                />
+             </div>
+
+            <div class="form-group">
+              <label for="char-resize-select" class="form-label">非目标比例处理:</label>
+              <select id="char-resize-select" v-model="characterResize" class="select medium-select" @change="saveProcessingConfig">
+                <option value="裁剪">裁剪 (Crop)</option>
+                <option value="填充">填充 (Pad)</option>
+                <option value="拉伸">拉伸 (Stretch)</option>
               </select>
             </div>
           </div>
-
-          <p class="tip-text">提示: 设置人物图像的宽高比例，非指定比例时的处理方式</p>
+          <p class="tip-text help-text">设置人物图的目标分辨率及比例不符时的处理方式。</p>
         </div>
       </div>
 
+      <hr class="separator thin-separator" />
+
       <!-- 背景分辨率调整 -->
-      <div class="section-container">
-        <div class="toggle-row">
-          <div class="toggle-container">
-            <input
-              type="checkbox"
-              v-model="backgroundResolution"
-              class="toggle"
-              @change="saveProcessingConfig"
-            />
-            <div class="toggle-slider"></div>
+      <div class="resolution-section">
+          <div class="toggle-row">
+              <div class="switch-container">
+                 <div class="switch">
+                   <input type="checkbox" id="bg-res-switch" v-model="backgroundResolution" @change="saveProcessingConfig" />
+                   <label for="bg-res-switch" class="switch-slider"></label>
+                 </div>
+                 <label for="bg-res-switch" class="switch-label label-bold">启用背景绘画分辨率调整 (至 16:9)</label>
+              </div>
           </div>
-          <label class="toggle-label1">启用背景绘画分辨率调整</label>
-        </div>
 
         <div v-if="backgroundResolution" class="settings-container">
-          <div class="grid-container">
-            <div class="grid-row">
-              <label class="grid-label">非16:9比例方案:</label>
-              <select v-model="backgroundResize" class="medium-select" @change="saveProcessingConfig">
-                <option value="裁剪">裁剪</option>
-                <option value="填充">填充</option>
-                <option value="拉伸">拉伸</option>
-              </select>
-            </div>
-          </div>
-
-          <p class="tip-text">提示: 背景图像将自动调整为16:9比例，此选项控制调整方法</p>
+           <div class="form-grid resolution-grid single-col-grid"> <!-- Use single column for this one -->
+              <div class="form-group">
+                <label for="bg-resize-select" class="form-label">非 16:9 比例处理:</label>
+                <select id="bg-resize-select" v-model="backgroundResize" class="select medium-select" @change="saveProcessingConfig">
+                  <option value="裁剪">裁剪 (Crop)</option>
+                  <option value="填充">填充 (Pad)</option>
+                  <option value="拉伸">拉伸 (Stretch)</option>
+                </select>
+              </div>
+           </div>
+           <p class="tip-text help-text">背景图将自动调整为 16:9 比例，此选项控制调整方法。</p>
         </div>
       </div>
     </div>
@@ -155,281 +166,280 @@
 </template>
 
 <script>
-import { writeFile, listDirectory } from './services/IndexedDBFileSystem.js';
+// --- Script remains unchanged ---
+import { writeFile, listDirectory, createFolder } from './services/IndexedDBFileSystem.js'; // Added createFolder
 
 export default {
   name: 'ProcessingTabContent',
   data() {
     return {
-      // rembg设置
       rembgLocation: "http://localhost:7000/api/remove",
       rembgModel: "isnet-anime",
-      rembgModels: ["isnet-anime"], // 默认模型
-      
-      // 模型导入相关
+      rembgModels: ["isnet-anime"],
       modelFile: null,
       uploadStatus: "",
       uploadSuccess: false,
-
-      // 分辨率调整设置
       characterResolution: false,
       backgroundResolution: false,
       characterWidth: 1024,
       characterHeight: 1024,
       characterResize: "裁剪",
       backgroundResize: "裁剪",
-
-      // 状态信息
       processingStatus: "准备就绪"
     }
   },
   methods: {
-    // 清除选择
     clearSelection(event) {
-      event.target.select();
+      // event.target.select(); // This might be annoying, consider removing if not needed
     },
-
-    // 加载配置
     loadProcessingConfig() {
       try {
         const configStr = localStorage.getItem('aiGalgameConfig');
-        if (!configStr) return;
+        if (!configStr) { this.initializeDefaultProcessingConfig(); return; } // Init if no config
 
         const config = JSON.parse(configStr);
-        if (!config.AI_draw || !config.AI_draw.processing_config) return;
-
-        const processingConfig = config.AI_draw.processing_config;
-
-        // 加载rembg设置
-        this.rembgLocation = processingConfig.rembg_location || "http://localhost:7000/api/remove";
-        this.rembgModel = processingConfig.rembg_model || "isnet-anime";
-
-        // 加载开关状态
-        this.characterResolution = processingConfig.character_resolution || false;
-        this.backgroundResolution = processingConfig.background_resolution || false;
-
-        // 加载分辨率设置
-        if (processingConfig.character_width !== undefined && processingConfig.character_width !== null) {
-          this.characterWidth = processingConfig.character_width;
+        // Ensure processing_config exists
+        if (!config.AI_draw || !config.AI_draw.processing_config) {
+             this.initializeDefaultProcessingConfig(); // Init if structure missing
+             // Use the initialized defaults if necessary by re-reading config
+             const updatedConfigStr = localStorage.getItem('aiGalgameConfig');
+             const updatedConfig = updatedConfigStr ? JSON.parse(updatedConfigStr) : config;
+             const processingConfig = updatedConfig?.AI_draw?.processing_config || {};
+             this.applyConfigValues(processingConfig);
+        } else {
+             this.applyConfigValues(config.AI_draw.processing_config);
         }
-        if (processingConfig.character_height !== undefined && processingConfig.character_height !== null) {
-          this.characterHeight = processingConfig.character_height;
-        }
-        if (processingConfig.character_resize) {
-          this.characterResize = processingConfig.character_resize;
-        }
-        if (processingConfig.background_resize) {
-          this.backgroundResize = processingConfig.background_resize;
-        }
-        
-        // 加载模型列表
-        this.loadRembgModels();
+
+        this.loadRembgModels(); // Load models after potentially initializing
       } catch (error) {
         console.error("加载后处理配置时出错:", error);
+        this.$emit('show-message', { title: "error", message: `加载后处理配置失败: ${error.message}`});
+         this.initializeDefaultProcessingConfig(); // Attempt to initialize on error
+         this.loadRembgModels(); // Load models after potential init
       }
     },
-    
-    // 加载rembg模型列表
+
+    // Helper to apply loaded values to data properties
+    applyConfigValues(processingConfig) {
+        this.rembgLocation = processingConfig.rembg_location || "http://localhost:7000/api/remove";
+        this.rembgModel = processingConfig.rembg_model || "isnet-anime";
+        this.characterResolution = processingConfig.character_resolution === true; // Ensure boolean
+        this.backgroundResolution = processingConfig.background_resolution === true; // Ensure boolean
+        this.characterWidth = parseInt(processingConfig.character_width, 10) || 1024;
+        this.characterHeight = parseInt(processingConfig.character_height, 10) || 1024;
+        this.characterResize = processingConfig.character_resize || "裁剪";
+        this.backgroundResize = processingConfig.background_resize || "裁剪";
+    },
+
+     // Helper to initialize defaults if missing
+     initializeDefaultProcessingConfig() {
+        try {
+            const configStr = localStorage.getItem('aiGalgameConfig');
+            let config = {};
+            try { config = configStr ? JSON.parse(configStr) : {}; } catch (e) { console.error("Error parsing LS on init processing default:", e); }
+
+            let needsSave = false;
+            if (!config.AI_draw) { config.AI_draw = {}; needsSave = true; }
+            if (!config.AI_draw.processing_config) {
+                config.AI_draw.processing_config = { // Set all defaults
+                    rembg_location: "http://localhost:7000/api/remove",
+                    rembg_model: "isnet-anime",
+                    character_resolution: false,
+                    background_resolution: false,
+                    character_width: 1024,
+                    character_height: 1024,
+                    character_resize: "裁剪",
+                    background_resize: "裁剪",
+                };
+                needsSave = true;
+            } else {
+                // Check individual defaults if processing_config exists but might be incomplete
+                const pc = config.AI_draw.processing_config;
+                if (pc.rembg_location === undefined) { pc.rembg_location = "http://localhost:7000/api/remove"; needsSave = true; }
+                if (pc.rembg_model === undefined) { pc.rembg_model = "isnet-anime"; needsSave = true; }
+                if (pc.character_resolution === undefined) { pc.character_resolution = false; needsSave = true; }
+                if (pc.background_resolution === undefined) { pc.background_resolution = false; needsSave = true; }
+                if (pc.character_width === undefined) { pc.character_width = 1024; needsSave = true; }
+                if (pc.character_height === undefined) { pc.character_height = 1024; needsSave = true; }
+                if (pc.character_resize === undefined) { pc.character_resize = "裁剪"; needsSave = true; }
+                if (pc.background_resize === undefined) { pc.background_resize = "裁剪"; needsSave = true; }
+            }
+
+            if (needsSave) {
+                localStorage.setItem('aiGalgameConfig', JSON.stringify(config));
+                console.log("Initialized/Updated default processing config in localStorage.");
+            }
+        } catch (error) {
+            console.error("初始化默认后处理配置时出错:", error);
+        }
+    },
+
     async loadRembgModels() {
+      const modelDir = "/data/source/rembg-model";
       try {
-        const modelDir = "/data/source/rembg-model";
         const files = await listDirectory(modelDir);
-        
-        // 提取模型名称（去除扩展名）
-        const modelNames = files.filter(file => !file.isFolder && file.name.endsWith('.onnx'))
-          .map(file => file.name.replace('.onnx', ''));
-        
-        // 如果找到模型，则更新列表
+        const modelNames = files
+          .filter(file => !file.isFolder && file.name.toLowerCase().endsWith('.onnx'))
+          .map(file => file.name.replace(/\.onnx$/i, '')); // Case-insensitive extension removal
+
         if (modelNames.length > 0) {
-          this.rembgModels = modelNames;
+          this.rembgModels = modelNames.sort(); // Sort alphabetically
+           // Ensure the currently selected model still exists, otherwise default
+           if (!this.rembgModels.includes(this.rembgModel)) {
+                this.rembgModel = this.rembgModels[0] || "isnet-anime"; // Fallback further if needed
+           }
+        } else {
+            this.rembgModels = ["isnet-anime"]; // Default if directory is empty
+             this.rembgModel = "isnet-anime";
         }
       } catch (error) {
-        // 如果目录不存在，创建它
         if (error.message && error.message.includes("目录不存在")) {
+          console.log(`Directory ${modelDir} not found, attempting to create.`);
           try {
-            // 在IndexedDBFileSystem中创建rembg模型目录
-            await this.ensureRembgModelDir();
+            await this.ensureRembgModelDir(); // Create directory
+            this.rembgModels = ["isnet-anime"]; // Set default after creation
+            this.rembgModel = "isnet-anime";
           } catch (dirError) {
             console.error("创建rembg模型目录时出错:", dirError);
+            this.rembgModels = ["isnet-anime"]; // Fallback default
+             this.rembgModel = "isnet-anime";
           }
         } else {
           console.error("加载rembg模型列表时出错:", error);
+          this.rembgModels = ["isnet-anime"]; // Fallback default
+           this.rembgModel = "isnet-anime";
         }
       }
     },
-    
-    // 确保rembg模型目录存在
     async ensureRembgModelDir() {
-      try {
-        // 创建模型目录的标记文件
-        await writeFile("/data/source/rembg-model/.directory", "Directory for rembg models");
-      } catch (error) {
-        console.error("创建模型目录时出错:", error);
-        throw error;
-      }
+        // Use createFolder which handles nested creation
+        const modelDir = "/data/source/rembg-model";
+        try {
+           await createFolder(modelDir);
+           console.log(`Ensured directory exists: ${modelDir}`);
+           // Optional: Create a placeholder file if needed, but createFolder is usually sufficient
+           // await writeFile(`${modelDir}/.placeholder`, "rembg models directory");
+        } catch (error) {
+            // Ignore "already exists" errors
+            if (!error.message.includes('文件夹已存在') && !error.message.includes('Key already exists')) {
+                console.error(`创建目录 ${modelDir} 时出错:`, error);
+                throw error; // Re-throw critical errors
+            }
+        }
     },
-    
-    // 处理模型文件选择
     handleModelFileChange(event) {
       const files = event.target.files;
       if (files.length > 0) {
         const file = files[0];
-        // 检查文件是否为.onnx格式
         if (file.name.toLowerCase().endsWith('.onnx')) {
           this.modelFile = file;
-          this.uploadStatus = "已选择文件: " + file.name;
-          this.uploadSuccess = true;
+          this.uploadStatus = `已选择: ${file.name}`;
+          this.uploadSuccess = true; // Mark as ready
         } else {
           this.modelFile = null;
-          this.uploadStatus = "错误: 请选择ONNX格式的文件 (.onnx)";
+          this.uploadStatus = "错误: 请选择 .onnx 文件";
           this.uploadSuccess = false;
+           this.$emit('show-message', { title: "error", message: "请选择 ONNX 格式的模型文件 (.onnx)" });
+           event.target.value = ''; // Clear invalid selection
         }
       } else {
         this.modelFile = null;
         this.uploadStatus = "";
       }
     },
-    
-    // 上传模型文件
     async uploadModel() {
       if (!this.modelFile) {
-        this.uploadStatus = "错误: 请先选择模型文件";
+        this.uploadStatus = "错误: 未选择文件";
         this.uploadSuccess = false;
         return;
       }
-      
+
+      this.uploadStatus = "正在上传...";
+      this.uploadSuccess = false;
       try {
-        // 显示上传状态
-        this.uploadStatus = "正在上传...";
-        this.uploadSuccess = false;
-        
-        // 确保rembg模型目录存在
-        await this.ensureRembgModelDir();
-        
-        // 读取文件内容
-        const reader = new FileReader();
-        reader.onload = async (e) => {
-          try {
-            // 获取文件内容
-            const fileContent = e.target.result;
-            
-            // 构建保存路径（去掉文件扩展名）
-            const fileName = this.modelFile.name;
-            const modelName = fileName.replace(/\.[^/.]+$/, ""); // 移除扩展名
-            const filePath = `/data/source/rembg-model/${fileName}`;
-            
-            // 保存模型文件
-            await writeFile(filePath, fileContent);
-            
-            // 更新状态
-            this.uploadStatus = `模型 "${fileName}" 上传成功`;
-            this.uploadSuccess = true;
-            
-            // 刷新模型列表
-            await this.loadRembgModels();
-            
-            // 如果当前没有选择模型，选择刚上传的模型
-            if (!this.rembgModel || this.rembgModel === "") {
-              this.rembgModel = modelName;
-              this.saveProcessingConfig();
-            }
-            
-            // 清除文件输入
-            this.$refs.modelFileInput.value = '';
-            this.modelFile = null;
-          } catch (error) {
-            console.error("保存模型文件时出错:", error);
-            this.uploadStatus = "上传失败: " + error.message;
-            this.uploadSuccess = false;
-          }
-        };
-        
-        reader.onerror = () => {
-          this.uploadStatus = "读取文件时出错";
-          this.uploadSuccess = false;
-        };
-        
-        // 以二进制格式读取文件
-        reader.readAsArrayBuffer(this.modelFile);
+        await this.ensureRembgModelDir(); // Ensure directory exists
+
+        // No need for FileReader if writeFile handles Blob/File directly
+        const filePath = `/data/source/rembg-model/${this.modelFile.name}`;
+        await writeFile(filePath, this.modelFile); // Pass the File object
+
+        this.uploadStatus = `模型 "${this.modelFile.name}" 上传成功`;
+        this.uploadSuccess = true;
+        await this.loadRembgModels(); // Refresh dropdown
+
+        // Select the newly uploaded model
+        const modelNameOnly = this.modelFile.name.replace(/\.onnx$/i, '');
+        if (this.rembgModels.includes(modelNameOnly)) {
+             this.rembgModel = modelNameOnly;
+             this.saveProcessingConfig(); // Save selection
+        }
+
+        this.$refs.modelFileInput.value = ''; // Clear file input
+        this.modelFile = null;
+         this.$emit('show-message', { title: "success", message: this.uploadStatus });
+
       } catch (error) {
         console.error("上传模型时出错:", error);
-        this.uploadStatus = "上传失败: " + error.message;
+        this.uploadStatus = `上传失败: ${error.message}`;
         this.uploadSuccess = false;
+        this.$emit('show-message', { title: "error", message: this.uploadStatus });
       }
     },
-
-    // 保存配置
     saveProcessingConfig() {
       try {
         const configStr = localStorage.getItem('aiGalgameConfig');
         const config = configStr ? JSON.parse(configStr) : {};
-
-        // 确保配置结构存在
         if (!config.AI_draw) config.AI_draw = {};
+        // Initialize sub-object if it doesn't exist
         if (!config.AI_draw.processing_config) config.AI_draw.processing_config = {};
 
+        // Create the processing config object with current values
         const processingConfig = {
           rembg_location: this.rembgLocation || "http://localhost:7000/api/remove",
           rembg_model: this.rembgModel || "isnet-anime",
-          character_resolution: this.characterResolution,
-          background_resolution: this.backgroundResolution
+          character_resolution: this.characterResolution, // Save boolean
+          background_resolution: this.backgroundResolution, // Save boolean
+           // Save numbers, ensuring they are valid
+          character_width: parseInt(this.characterWidth, 10) || 1024,
+          character_height: parseInt(this.characterHeight, 10) || 1024,
+          character_resize: this.characterResize,
+          background_resize: this.backgroundResize
         };
 
-        // 仅当开关启用时保存对应设置
-        if (this.characterResolution) {
-          processingConfig.character_width = parseInt(this.characterWidth);
-          processingConfig.character_height = parseInt(this.characterHeight);
-          processingConfig.character_resize = this.characterResize;
-        }
-
-        if (this.backgroundResolution) {
-          processingConfig.background_resize = this.backgroundResize;
-        }
-
-        // 更新配置
+        // Update the main config object
         config.AI_draw.processing_config = processingConfig;
-
-        // 保存到localStorage
         localStorage.setItem('aiGalgameConfig', JSON.stringify(config));
 
-        // 更新状态
         this.processingStatus = "设置已保存";
-        setTimeout(() => {
-          this.processingStatus = "准备就绪";
-        }, 2000);
-
-        // 显示成功提示
-        // This.$emit relies on the parent App.vue having a listener for 'show-message'
-        // If it doesn't, this line can be removed or replaced with a local notification
-        this.$emit('show-message', {
-           title: "success",
-           message: "后处理配置已保存！"
-         });
-         console.log("后处理配置已保存！"); // Fallback logging
+        setTimeout(() => { this.processingStatus = "准备就绪"; }, 2000);
+        this.$emit('show-message', { title: "success", message: "后处理配置已保存！" });
       } catch (error) {
         console.error("保存后处理配置时出错:", error);
+        this.$emit('show-message', { title: "error", message: `保存失败: ${error.message}` });
+        this.processingStatus = "保存失败";
       }
     },
+     validateAndSave(type) {
+        const isWidth = type === 'width';
+        let currentValue = isWidth ? this.characterWidth : this.characterHeight;
+        let num = parseInt(currentValue, 10);
 
-    validateAndSave(type) {
-      const minValue = 1;
-      const maxValue = 4096;
+        if (isNaN(num)) {
+            num = 1024; // Default if invalid
+        } else {
+             num = Math.max(1, Math.min(4096, num)); // Clamp between 1 and 4096
+        }
 
-      // 验证逻辑
-      if (type === 'width') {
-        // Ensure it's a number before validation, default to 1024 if not a valid number
-        this.characterWidth = parseInt(this.characterWidth);
-        if (isNaN(this.characterWidth)) this.characterWidth = 1024;
-        this.characterWidth = Math.max(minValue, Math.min(maxValue, this.characterWidth));
-      } else { // type === 'height'
-         // Ensure it's a number before validation, default to 1024 if not a valid number
-        this.characterHeight = parseInt(this.characterHeight);
-        if (isNaN(this.characterHeight)) this.characterHeight = 1024;
-        this.characterHeight = Math.max(minValue, Math.min(maxValue, this.characterHeight));
-      }
+        // Update the data property
+        if (isWidth) {
+            this.characterWidth = num;
+        } else {
+            this.characterHeight = num;
+        }
 
-      this.saveProcessingConfig();
-    },
+        // Save the config after validation
+        this.saveProcessingConfig();
+    }
   },
   mounted() {
     this.loadProcessingConfig();
@@ -438,313 +448,112 @@ export default {
 </script>
 
 <style scoped>
-/* Import variables from App.vue's global styles */
-/* Note:Scoped styles don't technically "import" variables like this.
-  Variables defined on :root or body in the parent component
-  are inherited or accessible by children elements regardless of scoping.
-  This comment is just for conceptual clarity. */
+/* Reuse styles from Character/BackgroundTabContent where applicable */
+.tab-content-container { /* Basic container */ }
 
-.main-container {
-  padding: 20px;
-  /* background-color inherits from body, which is var(--content-bg) */
+.title-frame { margin-bottom: 15px; }
+.title-label { font-size: 1.4rem; font-weight: 600; color: var(--text-primary); margin-bottom: 2px; }
+.subtitle-label { font-size: 0.95rem; color: var(--text-secondary); }
+
+.separator { border: none; border-top: 1px solid var(--border-color); margin: 15px 0; }
+.thin-separator { margin: 10px 0; border-color: var(--hover-overlay); }
+
+.section-frame { /* uses .card */ margin-bottom: 25px; padding: 20px; }
+.section-title { font-size: 1.1rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 20px; padding-bottom: 8px; border-bottom: 1px dashed var(--border-color); }
+
+/* Form Grid */
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 15px 25px; /* Row gap, Column gap */
+}
+.grid-span-2 {
+    grid-column: span 2 / span 2;
+}
+@media (max-width: 600px) {
+   .grid-span-2 { grid-column: span 1 / span 1; }
 }
 
-.title-frame {
-  margin-bottom: 15px;
-}
+.form-group { margin-bottom: 0; } /* Remove margin when inside grid */
+.form-label { display: block; margin-bottom: 6px; color: var(--text-secondary); font-size: 0.95rem; font-weight: 500; }
+.input-field { /* Base for text input and select */ width: 100%; }
+.input { /* From global */ }
+.select { /* From global */ }
 
-.title-label {
-  font-size: 1.25rem;
-  font-weight: bold;
-  margin: 0;
-  /* color: #24292e; */
-  color: var(--text-primary); /* Use variable */
-}
+/* Rembg Specific */
+.rembg-grid { /* Specific grid layout for rembg */ }
+.model-import-group label { margin-bottom: 8px; } /* Extra space for button row */
 
-.subtitle-label {
-  display: block;
-  /* color: #586069; */
-  color: var(--text-secondary); /* Use variable */
-  margin-top: 5px;
+.file-upload-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 10px;
 }
-
-.separator {
-  height: 1px;
-  /* background-color: #e1e4e8; */
-  background-color: var(--border-color); /* Use variable */
-  margin: 15px 0;
+.hidden-file-input {
+    width: 0.1px; height: 0.1px; opacity: 0;
+    overflow: hidden; position: absolute; z-index: -1;
 }
-
-.section-frame {
-  /* background-color: white; */
-  background-color: var(--content-bg); /* Use variable */
-  /* border: 1px solid #e1e4e8; */
-  border: 1px solid var(--border-color); /* Use variable */
-  border-radius: 6px;
-  padding: 15px;
-  margin-bottom: 15px;
-  /* box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05); */
-  box-shadow: var(--shadow); /* Use variable from App.vue */
+.file-input-label {
+    /* uses .btn .btn-outline .btn-sm */
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: calc(100% - 100px); /* Adjust based on upload button width */
+    flex-grow: 1;
+    justify-content: flex-start; /* Align text left */
 }
-
-.section-title {
-  font-size: 1rem;
-  margin: 0 0 15px 0;
-  /* color: #24292e; */
-  color: var(--text-primary); /* Use variable */
-  font-weight: bold;
-}
-
-.input-row {
-  display: flex;
-  align-items: center;
-  margin-bottom: 10px;
-}
-
-.input-label {
-  width: 100px;
-  flex-shrink: 0;
-  color: var(--text-primary); /* Ensure text color adapts */
-}
-
-.input-field {
-  flex: 1;
-  padding: 6px 10px;
-  /* border: 1px solid #e1e4e8; */
-  border: 1px solid var(--border-color); /* Use variable */
-  border-radius: 4px;
-  /* background-color: white; */
-  background-color: var(--content-bg); /* Use variable */
-  /* color: initial; */
-  color: var(--text-primary); /* Ensure text color adapts */
-}
-
-.input-field:focus {
-  outline: 2px solid var(--primary-color); /* Use variable */
-  outline-offset: -1px;
-}
-
-.button-row {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 10px;
-}
-
-.save-button {
-  padding: 8px 16px;
-  /* background-color: #28a745; */
-  background-color: var(--success-color); /* Use variable from App.vue */
-  border: none;
-  border-radius: 4px;
-  /* color: white; */
-  color: var(--active-text); /* Use variable (white works too) */
-  cursor: pointer;
-  font-weight: bold;
-  transition: background-color 0.2s;
-}
-
-/* 新增上传按钮样式 */
-.upload-button {
-  padding: 6px 12px;
-  margin-left: 10px;
-  background-color: var(--primary-color);
-  border: none;
-  border-radius: 4px;
-  color: var(--active-text);
-  cursor: pointer;
-  font-weight: bold;
-  transition: background-color 0.2s;
-}
-
-.upload-button:disabled {
-  background-color: var(--border-color);
-  cursor: not-allowed;
-  opacity: 0.7;
-}
-
-.file-input {
-  flex: 1;
-  padding: 4px;
-  color: var(--text-primary);
-}
-
 .upload-status {
-  margin-top: 5px;
-  padding: 5px;
-  border-radius: 4px;
-  font-size: 0.9rem;
+    font-size: 0.85rem;
+    margin-top: 8px;
+    padding: 5px 8px;
+    border-radius: var(--border-radius-sm);
 }
+.upload-success { color: var(--secondary-dark); background-color: rgba(var(--secondary-color-rgb, 46, 204, 113), 0.1); border: 1px solid var(--secondary-light); }
+.upload-error { color: var(--danger-dark); background-color: rgba(var(--danger-color-rgb, 231, 76, 60), 0.1); border: 1px solid var(--danger-light); }
+.upload-status .fa-icon { margin-right: 5px; }
 
-.upload-success {
-  background-color: rgba(40, 167, 69, 0.1);
-  color: var(--success-color);
-  border: 1px solid var(--success-color);
-}
+.button-frame { margin-top: 20px; display: flex; }
+.button-frame.single-button { justify-content: flex-end; } /* Align single save button right */
+.button-frame .btn { /* Uses global .btn */ }
 
-.upload-error {
-  background-color: rgba(220, 53, 69, 0.1);
-  color: var(--error-color, #dc3545);
-  border: 1px solid var(--error-color, #dc3545);
-}
 
-/* Hover color might need adjustment in dark mode, but using a darker shade of the base color is common */
-.save-button:hover, .upload-button:hover {
-  /* background-color: #218838; */
-   /* A slightly darker green for hover, need to find a value that works in dark mode too */
-   /* Using a fixed color for hover might be better than trying to calculate a shade of a variable */
-   /* Let's keep the original for now, or define a new variable if needed */
-   filter: brightness(90%); /* A simple way to darken the background */
-}
-
-/* 分辨率设置样式 */
-.section-container {
-  margin-bottom: 15px;
-}
-
-.toggle-row {
-  display: flex;
-  align-items: center;
-  margin-bottom: 10px;
-}
-
-.toggle-container {
-  position: relative;
-  width: 40px;
-  height: 20px;
-  margin-right: 8px;
-}
-
-.toggle {
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  opacity: 0;
-  margin: 0;
-  cursor: pointer;
-  z-index: 1;
-}
-  .toggle-slider {
-  position: absolute;
-  cursor: pointer;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  /* background-color: #ccc; */
-  background-color: var(--border-color); /* Use variable for unselected */
-  transition: .4s;
-  border-radius: 20px;
-}
-
-.toggle-slider:before {
-  position: absolute;
-  content: "";
-  height: 16px;
-  width: 16px;
-  left: 2px;
-  bottom: 2px;
-  /* background-color: white; */
-  background-color: var(--content-bg); /* Use variable for the thumb */
-  transition: .4s;
-  border-radius: 50%;
-}
-
-.toggle:checked + .toggle-slider {
-  /* background-color: #0366d6; */
-  background-color: var(--primary-color); /* Use variable for selected */
-}
-
-.toggle:checked + .toggle-slider:before {
-  transform: translateX(20px);
-}
-
-.toggle-label1 {
-  font-weight: 500;
-   color: var(--text-primary); /* Ensure text color adapts */
-}
-
+/* Resolution Settings */
+.resolution-section { margin-bottom: 20px; }
+.resolution-section:last-child { margin-bottom: 0; }
+.toggle-row { margin-bottom: 15px; }
 .settings-container {
-  margin-left: 20px;
-  padding: 10px;
-  /* background-color: #f6f8fa; */
-  background-color: var(--hover-bg); /* Use variable for light background */
-  border-radius: 4px;
-  /* border: 1px solid var(--border-color); Optional border */
+    padding-left: 20px; /* Indent settings under toggle */
+    margin-top: 10px;
+    border-left: 2px solid var(--hover-overlay);
 }
+.resolution-grid { gap: 15px 20px; }
+.size-input { /* uses .input */ max-width: 100px; text-align: center; }
+.medium-select { /* uses .select */ max-width: 150px; }
+.single-col-grid { grid-template-columns: minmax(200px, 300px); } /* Limit width for single column grid */
+.tip-text { margin-top: 10px; }
+.help-text { font-size: 0.85rem; color: var(--text-tertiary); line-height: 1.4; }
 
-.grid-container {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
+/* Shared Switch Styles */
+.switch-container { display: flex; align-items: center; gap: 10px; }
+/* Use global .switch styles here */
+.switch { position: relative; display: inline-block; width: 50px; height: 24px; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.switch-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: var(--border-color); transition: .4s; border-radius: 24px; }
+.switch-slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+.switch input:checked + .switch-slider { background-color: var(--primary-color); }
+.switch input:focus + .switch-slider { box-shadow: 0 0 1px var(--primary-color); }
+.switch input:checked + .switch-slider:before { transform: translateX(26px); }
+/* End global switch styles */
+.switch-label { font-size: 1rem; color: var(--text-primary); cursor: pointer; }
+.label-bold { font-weight: 600; }
 
-.grid-row {
-  display: flex;
-  align-items: center;
-}
 
-.grid-label {
-    color: var(--text-primary); /* Ensure text color adapts */
-}
+/* Status Bar */
+.status-frame { margin-top: 20px; padding: 8px 12px; background-color: var(--hover-overlay); border-radius: var(--border-radius-sm); display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem; }
+.status-label { color: var(--text-secondary); font-style: italic; }
 
-.small-select {
-  width: 60px;
-  padding: 4px;
-  border-radius: 4px;
-  /* border: 1px solid #e1e4e8; */
-  border: 1px solid var(--border-color); /* Use variable */
-   /* background-color: white; */
-  background-color: var(--content-bg); /* Use variable */
-  /* color: initial; */
-  color: var(--text-primary); /* Ensure text color adapts */
-}
-
-.medium-select {
-  width: 100px;
-  padding: 4px;
-  border-radius: 4px;
-  /* border: 1px solid #e1e4e8; */
-  border: 1px solid var(--border-color); /* Use variable */
-  /* background-color: white; */
-  background-color: var(--content-bg); /* Use variable */
-  /* color: initial; */
-  color: var(--text-primary); /* Ensure text color adapts */
-}
-
-.ml-15 {
-  margin-left: 15px;
-}
-
-.tip-text {
-  /* color: #586069; */
-  color: var(--text-secondary); /* Use variable */
-  font-size: 0.85rem;
-  margin-top: 8px;
-}
-
-.status-frame {
-  margin-top: 15px;
-  /* color: #586069; */
-  color: var(--text-secondary); /* Use variable */
-}
-
-/* 新增输入框样式 */
-.size-input {
-  width: 80px;
-  padding: 4px 8px;
-  /* border: 1px solid #e1e4e8; */
-  border: 1px solid var(--border-color); /* Use variable */
-  border-radius: 4px;
-  margin-right: 10px;
-   /* background-color: white; */
-  background-color: var(--content-bg); /* Use variable */
-  /* color: initial; */
-  color: var(--text-primary); /* Ensure text color adapts */
-}
-
-.size-input:focus {
-  /* outline: 2px solid #0366d6; */
-  outline: 2px solid var(--primary-color); /* Use variable */
-  outline-offset: -1px;
-}
 </style>
