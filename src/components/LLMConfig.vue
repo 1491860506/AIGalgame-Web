@@ -1367,7 +1367,7 @@ export default {
 /* Right Panel: Configuration Details (Tabs) */
 .config-details-panel {
   flex: 1;
-  min-width: 400px;
+  min-width: 350px;
   display: flex;
   flex-direction: column;
 }
