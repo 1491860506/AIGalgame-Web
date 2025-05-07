@@ -459,8 +459,8 @@ const displayedLogs = computed(() => {
 
 // Keywords for classification
 const logKeywords = {
-  outlineStory: ['正在生成大纲', '获取到故事标题', '正在生成故事开篇', '故事开篇生成失败', '故事开篇完成', '开始生成新故事', '开始准备本地故事', '故事文件'],
-  voice: ['语音处理ID', '语音生成失败：', '语音生成结束', '开始生成语音', '语音信息：', '语音生成并发数：', '语音待生成数：', '语音合成完成', '语音合成失败'], // Combined keywords
+  outlineStory: ['正在生成大纲', '获取到故事标题', '正在生成故事开篇', '故事开篇生成失败', '故事开篇完成', '开始生成新故事', '开始准备本地故事', '故事文件','无需生成大纲'],
+  voice: ['语音处理ID', '语音生成失败', '语音生成结束', '开始生成语音', '语音信息：', '语音生成并发数：', '语音待生成数：', '语音合成完成', '语音合成失败'], // Combined keywords
   music: ['生成音乐：', '生成音乐失败：', '背景音乐', '背景音乐生成失败', '下载并保存音乐文件'], // Combined keywords
   image: ['AI_draw Error:', 'AI_draw:', '图像生成失败', 'Progress:', 'Main model manager exhausted', 'tasks completed normally', '生成图片'], // Combined keywords + common terms
 };
@@ -506,9 +506,24 @@ function updateOutlineStoryProgress(line) {
     if (line.includes('正在生成大纲') && taskTimeState.outline.status === 'pending') {
         // Timer should have started on mount
     }
+    if (line.includes('本地故事，无需生成大纲')) {
+        endTaskTimer('outline', 'disabled');
+        endTaskTimer('story', 'disabled');
+        // Trigger dependent tasks
+        startTaskTimer('music'); 
+        startTaskTimer('imageTitle'); 
+        startTaskTimer('imageCharacter');
+        startTaskTimer('imageBackground');
+    }
     match = line.match(/获取到故事标题:\s*(.*)/);
     if (match && taskTimeState.outline.status !== 'success') {
         progressState.outline.title = match[1].trim();
+        const storyChannel = new BroadcastChannel('story_updates');
+        storyChannel.postMessage({
+          type: 'newStoryCreated',
+          title: progressState.outline.title
+        });
+        storyChannel.close();
         progressState.outline.progress = '1/1';
         endTaskTimer('outline', 'success');
         // Trigger dependent tasks
@@ -670,7 +685,7 @@ function updateVoiceProgressStateMachine(line) {
     }
 
     // Handle generic completion/failure messages if the specific "End" message isn't present
-    if (line.includes('语音合成完成') && voiceProgressState.status === 'processing') {
+    if (line.includes('语音生成成功') && voiceProgressState.status === 'processing') {
         voiceProgressState.status = 'completed_success';
         voiceProgressState.endTime = Date.now();
         // Assume all non-failed are success if total is known
@@ -679,7 +694,7 @@ function updateVoiceProgressStateMachine(line) {
         }
         endTaskTimer('voice', 'success');
     }
-     if (line.includes('语音合成失败') && voiceProgressState.status === 'processing') {
+     if (line.includes('语音生成失败') && voiceProgressState.status === 'processing') {
          // This is ambiguous, could be one failure or total failure. Mark as completed_failed.
          voiceProgressState.status = 'completed_failed';
          voiceProgressState.endTime = Date.now();
@@ -813,7 +828,7 @@ onMounted(async () => {
            }
 
            await nextTick();
-           showToast('已存在的故事', `故事 '${storyTitle}' 已存在，无需重新生成。`, 'success', 2, '跳转');
+           showToast('已存在的故事', `故事 '${storyTitle}' 已存在，无需重新生成。`, 'success', 1, '跳转');
            return;
        }
     } else {

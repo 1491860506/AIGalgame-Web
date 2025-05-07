@@ -50,7 +50,7 @@ async function generateJson(prompt1, prompt2, storyTitle, id, storyId) {
         continue;
       } else if (jsonString === "over_times") {
         console.error("GPT调用超出最大重试次数");
-        return `达到最大尝试次数，失败原因：${failures.join(", ")}`;
+        return `故事生成错误：达到最大尝试次数，失败原因：${failures.join(", ")}`;
       }
       
       // 处理JSON数据
@@ -191,7 +191,10 @@ async function beginStory() {
   // 生成故事
   const id = Math.floor(Math.random() * 100000) + 1;
   const result = await generateJson(prompt1, prompt2, storyTitle, id, "0");
-  
+  if(result!=="成功生成对话"){
+    throw new Error(result);
+    
+  }
   console.log(result);
   return result;
 }

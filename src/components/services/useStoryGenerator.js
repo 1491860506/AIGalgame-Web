@@ -55,7 +55,7 @@ export function useStoryGenerator() {
             updateStatus('正在生成大纲...');
             const outlineResult = await getOutline(); // Assumes getOutline updates config internally if needed
             if (outlineResult !== 'success') {
-                 throw new Error('大纲生成失败');
+                 throw new Error('大纲生成错误：'+outlineResult);
             }
             // --- Reload config AFTER outline to get story_title ---
             config = loadConfig();
@@ -105,9 +105,15 @@ export function useStoryGenerator() {
             //updateStatus('启动并发任务 (语音, 选项, 地点图)...');
             
 
-            coreTasks.push(generateVoice("0", updateStatus).catch(e => { throw new Error(`语音生成(0)失败: ${e.message}`) }));
-            coreTasks.push(getChoice("0").catch(e => { throw new Error(`选项生成(0)失败: ${e.message}`) }));
-            coreTasks.push(getPlacesImagesJS(0, updateStatus).catch(e => { throw new Error(`地点图像生成失败: ${e.message}`) }));
+            coreTasks.push(generateVoice("0", updateStatus).catch(e => { //throw new Error(`语音生成(0)失败: ${e.message}`) 
+                updateStatus(`语音生成失败: ${e.message}`) 
+        }));
+            coreTasks.push(getChoice("0").catch(e => { //throw new Error(`选项生成(0)失败: ${e.message}`) 
+                updateStatus(`选项生成失败: ${e.message}`) 
+        }));
+            coreTasks.push(getPlacesImagesJS(0, updateStatus).catch(e => { //throw new Error(`地点图像生成失败: ${e.message}`) 
+                updateStatus(`地点图像生成失败: ${e.message}`) 
+            }));
 
             //updateStatus('等待任务完成...');
             await Promise.all(coreTasks); // Wait for voice, choice, places images
@@ -124,7 +130,7 @@ export function useStoryGenerator() {
             console.error("generateNewStory 发生错误:", error);
             updateStatus(`错误: ${error.message}`);
             isLoading.value = false;
-            return 'error';
+            throw error;
         }
     };
 
@@ -162,6 +168,7 @@ export function useStoryGenerator() {
                 throw new Error(`故事文件 ${storyJsonPath} 格式无效或缺少 conversations`);
             }
             //coreTasks.push(gettoken('music'));
+            updateStatus('本地故事，无需生成大纲');
             updateStatus('正在处理故事文件 (添加ID, 清理地点)...');
             let previousPlace = null;
             storyData.conversations = storyData.conversations.map((conv, index) => {
@@ -189,12 +196,31 @@ export function useStoryGenerator() {
 
             // --- Concurrent Tasks (Awaited via Promise.all) ---
             //updateStatus('启动并发任务 (语音, 选项, 角色图, 地点图)...');
+            coreTasks.push(getTitleImagesJS(0,updateStatus).catch(e => {
+                console.error('后台任务失败 - 标题图片生成:', e);
+                updateStatus(`警告: 标题图像生成失败 - ${e.message}`);
+            }));
             
-
-            coreTasks.push(generateVoice("0", updateStatus).catch(e => { throw new Error(`语音生成(0)失败: ${e.message}`) }));
-            coreTasks.push(getChoice("0").catch(e => { throw new Error(`选项生成(0)失败: ${e.message}`) }));
-            coreTasks.push(getAllPersonsImagesJS(updateStatus).catch(e => { throw new Error(`角色图像生成失败: ${e.message}`) }));
-            coreTasks.push(getPlacesImagesJS(0, updateStatus).catch(e => { throw new Error(`地点图像生成失败: ${e.message}`) }));
+            if (config?.AI音乐?.if_on === true) {
+                coreTasks.push(generateBackgroundMusic(updateStatus).catch(e => {
+                    console.error('后台任务失败 - 背景音乐生成:', e);
+                    updateStatus(`警告: 背景音乐生成失败 - ${e.message}`);
+                }));
+            } else {
+                updateStatus("背景音乐已禁用 (配置)。");
+            }
+            coreTasks.push(generateVoice("0", updateStatus).catch(e => { //throw new Error(`语音生成(0)失败: ${e.message}`) 
+                updateStatus(`语音生成失败: ${e.message}`) 
+        }));
+            coreTasks.push(getChoice("0").catch(e => { //throw new Error(`选项生成(0)失败: ${e.message}`) 
+                updateStatus(`选项生成失败: ${e.message}`) 
+        }));
+            coreTasks.push(getAllPersonsImagesJS(updateStatus).catch(e => { //throw new Error(`角色图像生成失败: ${e.message}`)
+            updateStatus(`角色图像生成失败: ${e.message}`)
+        }));
+            coreTasks.push(getPlacesImagesJS(0, updateStatus).catch(e => { //throw new Error(`地点图像生成失败: ${e.message}`) 
+            updateStatus(`地点图像生成失败: ${e.message}`) 
+        }));
 
             updateStatus('等待任务完成...');
             await Promise.all(coreTasks);
@@ -222,7 +248,7 @@ export function useStoryGenerator() {
             console.error("generateLocalStory 发生错误:", error);
             updateStatus(`错误: ${error.message}`);
             isLoading.value = false;
-            return 'error';
+            throw error;
         }
     };
 

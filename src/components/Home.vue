@@ -82,7 +82,7 @@
         <div class="content-container">
           <label for="story-prompt" class="input-label">输入故事设定、角色、初始情节等:</label>
           <textarea id="story-prompt" class="story-textarea input" v-model="outlineContent"
-            placeholder="例如：\n故事背景：魔法与科技并存的浮空城市。\n主要角色：\n- 艾莉：乐观的机械师少女\n- 凯恩：失忆的神秘骑士\n情节提示：艾莉意外发现了凯恩，两人决定一起探索城市的秘密..."
+            placeholder="例如：故事背景：魔法与科技并存的浮空城市。主要角色：艾莉：乐观的机械师少女,凯恩：失忆的神秘骑士。情节提示：艾莉意外发现了凯恩，两人决定一起探索城市的秘密..."
             @blur="saveOutlineContent"></textarea>
         </div>
         <!-- Action Buttons -->
@@ -283,21 +283,41 @@ export default {
       // Define default values for reset
       defaultProxyUrl: 'http://127.0.0.1:5436/proxy',
       defaultProxyPassword: 'defaultpassword',
+
+      // --- Add Broadcast Channel instance ---
+      storyChannel: null,
     };
   },
   computed: {
     canConfirmImport() {
       if (!this.importStoryName.trim()) return false;
       if (!this.importCharacterIntro && !this.importOpeningText && !this.importOutline) return false;
+      if (!this.importCharacterIntro && !this.importOpeningText && this.importOutline && !this.outlineFile) return false;
       if (this.importCharacterIntro && !this.characterFile) return false;
       if (this.importOpeningText && !this.openingFile) return false;
-      if (this.importOutline && !this.outlineFile) return false;
       return true;
     }
   },
   mounted() {
     this.loadStoryList();
     this.loadHomeConfig();
+
+    try {
+        this.storyChannel = new BroadcastChannel('story_updates');
+        this.storyChannel.onmessage = this.handleBroadcastMessage;
+        console.log("BroadcastChannel 'story_updates' initialized in Home.vue");
+    } catch (error) {
+        console.error("Failed to initialize BroadcastChannel:", error);
+        this.$emit('show-message', { title: "error", message: "无法建立跨页面通信，故事列表可能不会自动更新。" });
+    }
+  },
+  // --- Add unmounted hook for cleanup ---
+  unmounted() {
+    if (this.storyChannel) {
+      this.storyChannel.onmessage = null; // Remove listener
+      this.storyChannel.close(); // Close the channel
+      console.log("BroadcastChannel 'story_updates' closed in Home.vue");
+    }
   },
   methods: {
     // --- All methods (loadHomeConfig, saveConfig, saveOutlineSwitch, ..., extractJson) ---
@@ -695,6 +715,7 @@ export default {
         this.resetImportDialog();
 
         this.isLoading = false;
+        await writeFile(`/data/${title}/zw`,"");
         this.$emit('show-message', { title: "success", message: `故事 "${title}" 导入成功！` });
 
         // Decide whether to auto-start (based on the status *after* potential GPT completion)
@@ -704,6 +725,7 @@ export default {
         const charPass = statuses.character_status === 'pass';
         const outlinePass = statuses.outline_status === 'pass'; // This reflects the final status (checked AND valid content OR not checked)
         const storyPass = statuses.story_status === 'pass';
+
 
         // Auto-start conditions (Stricter: Require character + (outline or story))
         if (charPass && (outlinePass || storyPass)) {
@@ -844,7 +866,10 @@ export default {
         // outline_content: outline_data_raw ? String(outline_data_raw).substring(0, 500) : "",
         character_status: character_status,
         story_status: story_status,
-        outline_status: final_outline_status // Use the combined status
+        outline_status: final_outline_status,
+        character_content: character_data_raw,
+        story_content: story_data_raw,
+        outline_content: outline_data_raw
       };
       this.saveConfig(config);
 
@@ -1040,6 +1065,7 @@ export default {
 
         // Get processed prompts
         const [systemPrompt, userPrompt] = await processPrompt('本地导入', promptData);
+        //console.log(userPrompt);
 
         if (!systemPrompt || !userPrompt) {
           console.error("Failed to generate prompts for GPT import completion.");
@@ -1216,6 +1242,29 @@ export default {
 
        return null; // Give up
     },
+        // --- New method to handle messages from Broadcast Channel ---
+        handleBroadcastMessage(event) {
+      const message = event.data;
+      console.log("Received broadcast message:", message);
+      // Check if the message indicates a new story creation
+      if (message && message.type === 'newStoryCreated' && message.title) {
+        console.log(`New story "${message.title}" created in another tab.`);
+        // Reload the story list to include the new story
+        this.loadStoryList().then(() => {
+            // After list is loaded, try to select the new story in the dropdown
+            if (this.storyNames.includes(message.title)) {
+                 this.storyTitle = message.title; // Update the selected story
+                 this.saveStoryTitle(); // Save the new selection to config
+                 this.$emit('show-message', { title: "info", message: `故事列表已更新，新故事 "${message.title}" 可用` });
+            } else {
+                 console.warn(`New story "${message.title}" not found in reloaded list.`);
+                 this.$emit('show-message', { title: "warning", message: '故事列表已更新，但新故事未找到' });
+            }
+        }).catch(error => {
+             console.error("Error reloading story list after broadcast:", error);
+             this.$emit('show-message', { title: "error", message: '更新故事列表失败' });
+        });
+      }}
 
   }
 };

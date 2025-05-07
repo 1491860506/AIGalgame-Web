@@ -1089,7 +1089,7 @@ export default {
         this.showMessageBubble('success', `短文本语音生成成功`);
 
         // --- Test Long Text ---
-        const textLong = "斗之力，三段！"; // Shorter long text for faster testing
+        const textLong = "“斗之力，三段！”望着测验魔石碑上面闪亮得甚至有些刺眼的五个大字，少年面无表情，唇角有着一抹自嘲，紧握的手掌，因为大力，而导致略微尖锐的指甲深深的刺进了掌心之中，带来一阵阵钻心的疼痛…";
         const longFileName = `test_long_${this.selectedConfigName}_${nameId}_${Date.now()}`;
         const conversationMockLong = { id: longFileName, character: 'TestChar', emotion: gptReturnValueForTest, text: textLong }; // Use test value for emotion
         this.showMessageBubble('info', `正在生成长文本语音...`);

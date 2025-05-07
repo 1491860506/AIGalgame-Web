@@ -77,13 +77,13 @@ async function getOutline() {
     const configStr = localStorage.getItem('aiGalgameConfig');
     if (!configStr) {
       console.error("配置文件未找到");
-      return "error";
+      return "配置文件未找到";
     }
     
     config = JSON.parse(configStr);
   } catch (error) {
     console.error("解析配置文件失败:", error);
-    return "error";
+    return "解析配置文件失败:";
   }
   
   // 从配置获取主题
@@ -106,7 +106,7 @@ async function getOutline() {
         continue;
       } else if (gptResponse === "over_times") {
         console.error("GPT调用超出最大重试次数");
-        return "error";
+        return "GPT调用超出最大重试次数";
       }
       
       // 提取JSON对象
