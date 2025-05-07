@@ -550,6 +550,8 @@ async function generateVoice(storyId, updateStatus = console.log) {
 
 
     let skippedCount = 0;
+    let successCount=0;
+    let errorCount=0;
     // Array to hold conversations that actually need processing (after initial checks)
     const conversationsToProcessFiltered = [];
 
