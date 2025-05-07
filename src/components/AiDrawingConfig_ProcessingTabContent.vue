@@ -11,7 +11,60 @@
     <div class="section-frame card">
       <h4 class="section-title">背景去除设置 (rembg)</h4>
 
-      <div class="form-grid rembg-grid">
+      <!-- "使用远程 rembg" Switch -->
+      <div class="form-group" :class="{'grid-span-2': !useRemoteRembg}" style="margin-bottom: 20px;">
+        <div class="switch-container">
+          <div class="switch">
+            <input type="checkbox" id="use-remote-rembg-switch" v-model="useRemoteRembg" @change="clearRemoteParamsError" />
+            <label for="use-remote-rembg-switch" class="switch-slider"></label>
+          </div>
+          <label for="use-remote-rembg-switch" class="switch-label">使用远程 rembg</label>
+        </div>
+      </div>
+
+      <!-- Remote Rembg Settings (if switch is ON) -->
+      <div v-if="useRemoteRembg" class="form-grid rembg-grid">
+        <div class="form-group grid-span-2">
+          <label for="remote-rembg-url" class="form-label">远程 rembg 服务地址:</label>
+          <input
+            id="remote-rembg-url"
+            type="text"
+            v-model="remoteRembgUrl"
+            class="input"
+            placeholder="例如: http://your-remote-server/api/remove"
+            @focus="clearSelection"
+          />
+        </div>
+
+        <div class="form-group">
+          <label class="form-label"> </label> <!-- Spacer for alignment or could be grid-span-1 for URL-->
+          <div class="switch-container" style="margin-top: 5px;"> <!-- Adjust alignment as needed -->
+            <div class="switch">
+              <input type="checkbox" id="use-local-proxy-switch" v-model="useLocalProxy" />
+              <label for="use-local-proxy-switch" class="switch-slider"></label>
+            </div>
+            <label for="use-local-proxy-switch" class="switch-label">是否使用本地代理</label>
+          </div>
+        </div>
+
+        <div class="form-group grid-span-2">
+          <label for="remote-rembg-params" class="form-label">参数 (JSON):</label>
+          <textarea
+            id="remote-rembg-params"
+            v-model="remoteRembgParamsText"
+            class="input"
+            rows="6"
+            :placeholder="defaultRemoteParamsPlaceholder"
+            @input="clearRemoteParamsError"
+          ></textarea>
+          <p v-if="remoteParamsError" class="help-text error-text">{{ remoteParamsError }}</p>
+        </div>
+      </div>
+
+      <!-- Local Rembg Settings (if switch is OFF) -->
+      <div v-else class="form-grid rembg-grid">
+         <!-- Original rembg 服务地址 input is now intentionally removed when useRemoteRembg is false, as per request -->
+         <!--
          <div class="form-group grid-span-2">
             <label for="rembg-location" class="form-label">rembg 服务地址:</label>
             <input
@@ -23,6 +76,7 @@
               @focus="clearSelection"
             />
          </div>
+         -->
 
          <div class="form-group">
             <label for="rembg-model-select" class="form-label">rembg 模型:</label>
@@ -74,8 +128,7 @@
     <!-- 分辨率调整设置区域 -->
     <div class="section-frame card">
       <h4 class="section-title">分辨率调整设置</h4>
-
-      <!-- 人物分辨率调整 -->
+      <!-- ... rest of the template for resolution settings remains unchanged ... -->
       <div class="resolution-section">
          <div class="toggle-row">
            <div class="switch-container">
@@ -130,7 +183,6 @@
 
       <hr class="separator thin-separator" />
 
-      <!-- 背景分辨率调整 -->
       <div class="resolution-section">
           <div class="toggle-row">
               <div class="switch-container">
@@ -143,7 +195,7 @@
           </div>
 
         <div v-if="backgroundResolution" class="settings-container">
-           <div class="form-grid resolution-grid single-col-grid"> <!-- Use single column for this one -->
+           <div class="form-grid resolution-grid single-col-grid">
               <div class="form-group">
                 <label for="bg-resize-select" class="form-label">非 16:9 比例处理:</label>
                 <select id="bg-resize-select" v-model="backgroundResize" class="select medium-select" @change="saveProcessingConfig">
@@ -158,7 +210,6 @@
       </div>
     </div>
 
-    <!-- 状态显示区域 -->
     <div class="status-frame">
       <span class="status-label">{{ processingStatus }}</span>
     </div>
@@ -166,19 +217,34 @@
 </template>
 
 <script>
-// --- Script remains unchanged ---
-import { writeFile, listDirectory, createFolder } from './services/IndexedDBFileSystem.js'; // Added createFolder
+import { writeFile, listDirectory, createFolder } from './services/IndexedDBFileSystem.js';
+
+const defaultRemoteRembgParams = {
+  model: "isnet-anime",
+  a: "true", // As per example, these are strings
+  af: 240
+};
 
 export default {
   name: 'ProcessingTabContent',
   data() {
     return {
-      rembgLocation: "http://localhost:7000/api/remove",
+      // Original rembg settings
+      rembgLocation: "http://localhost:7000/api/remove", // Still kept for local/default config
       rembgModel: "isnet-anime",
       rembgModels: ["isnet-anime"],
       modelFile: null,
       uploadStatus: "",
       uploadSuccess: false,
+
+      // New remote rembg settings
+      useRemoteRembg: false,
+      remoteRembgUrl: "", // e.g., "http://localhost:7001/api/remote_rembg"
+      useLocalProxy: false,
+      remoteRembgParamsText: JSON.stringify(defaultRemoteRembgParams, null, 2),
+      remoteParamsError: "",
+
+      // Resolution settings
       characterResolution: false,
       backgroundResolution: false,
       characterWidth: 1024,
@@ -188,20 +254,26 @@ export default {
       processingStatus: "准备就绪"
     }
   },
+  computed: {
+    defaultRemoteParamsPlaceholder() {
+      return `例如:\n${JSON.stringify(defaultRemoteRembgParams, null, 2)}`;
+    }
+  },
   methods: {
     clearSelection(event) {
-      // event.target.select(); // This might be annoying, consider removing if not needed
+      // event.target.select();
+    },
+    clearRemoteParamsError() {
+        this.remoteParamsError = "";
     },
     loadProcessingConfig() {
       try {
         const configStr = localStorage.getItem('aiGalgameConfig');
-        if (!configStr) { this.initializeDefaultProcessingConfig(); return; } // Init if no config
+        if (!configStr) { this.initializeDefaultProcessingConfig(); return; }
 
         const config = JSON.parse(configStr);
-        // Ensure processing_config exists
         if (!config.AI_draw || !config.AI_draw.processing_config) {
-             this.initializeDefaultProcessingConfig(); // Init if structure missing
-             // Use the initialized defaults if necessary by re-reading config
+             this.initializeDefaultProcessingConfig();
              const updatedConfigStr = localStorage.getItem('aiGalgameConfig');
              const updatedConfig = updatedConfigStr ? JSON.parse(updatedConfigStr) : config;
              const processingConfig = updatedConfig?.AI_draw?.processing_config || {};
@@ -209,29 +281,42 @@ export default {
         } else {
              this.applyConfigValues(config.AI_draw.processing_config);
         }
-
-        this.loadRembgModels(); // Load models after potentially initializing
+        this.loadRembgModels();
       } catch (error) {
         console.error("加载后处理配置时出错:", error);
         this.$emit('show-message', { title: "error", message: `加载后处理配置失败: ${error.message}`});
-         this.initializeDefaultProcessingConfig(); // Attempt to initialize on error
-         this.loadRembgModels(); // Load models after potential init
+         this.initializeDefaultProcessingConfig();
+         this.loadRembgModels();
       }
     },
 
-    // Helper to apply loaded values to data properties
     applyConfigValues(processingConfig) {
+        // Original values
         this.rembgLocation = processingConfig.rembg_location || "http://localhost:7000/api/remove";
         this.rembgModel = processingConfig.rembg_model || "isnet-anime";
-        this.characterResolution = processingConfig.character_resolution === true; // Ensure boolean
-        this.backgroundResolution = processingConfig.background_resolution === true; // Ensure boolean
+
+        // New remote rembg values
+        this.useRemoteRembg = processingConfig.use_remote_rembg === true; // Ensure boolean
+        this.remoteRembgUrl = processingConfig.remote_rembg_url || "";
+        this.useLocalProxy = processingConfig.use_local_proxy === true; // Ensure boolean
+        // Ensure remoteRembgParamsText is a string and attempt to pretty-print if it's valid JSON
+        try {
+            const paramsObj = JSON.parse(processingConfig.remote_rembg_params || JSON.stringify(defaultRemoteRembgParams));
+            this.remoteRembgParamsText = JSON.stringify(paramsObj, null, 2);
+        } catch (e) {
+            this.remoteRembgParamsText = processingConfig.remote_rembg_params || JSON.stringify(defaultRemoteRembgParams, null, 2);
+        }
+
+
+        // Resolution values
+        this.characterResolution = processingConfig.character_resolution === true;
+        this.backgroundResolution = processingConfig.background_resolution === true;
         this.characterWidth = parseInt(processingConfig.character_width, 10) || 1024;
         this.characterHeight = parseInt(processingConfig.character_height, 10) || 1024;
         this.characterResize = processingConfig.character_resize || "裁剪";
         this.backgroundResize = processingConfig.background_resize || "裁剪";
     },
 
-     // Helper to initialize defaults if missing
      initializeDefaultProcessingConfig() {
         try {
             const configStr = localStorage.getItem('aiGalgameConfig');
@@ -241,9 +326,13 @@ export default {
             let needsSave = false;
             if (!config.AI_draw) { config.AI_draw = {}; needsSave = true; }
             if (!config.AI_draw.processing_config) {
-                config.AI_draw.processing_config = { // Set all defaults
+                config.AI_draw.processing_config = {
                     rembg_location: "http://localhost:7000/api/remove",
                     rembg_model: "isnet-anime",
+                    use_remote_rembg: false,
+                    remote_rembg_url: "",
+                    use_local_proxy: false,
+                    remote_rembg_params: JSON.stringify(defaultRemoteRembgParams, null, 2),
                     character_resolution: false,
                     background_resolution: false,
                     character_width: 1024,
@@ -253,10 +342,13 @@ export default {
                 };
                 needsSave = true;
             } else {
-                // Check individual defaults if processing_config exists but might be incomplete
                 const pc = config.AI_draw.processing_config;
                 if (pc.rembg_location === undefined) { pc.rembg_location = "http://localhost:7000/api/remove"; needsSave = true; }
                 if (pc.rembg_model === undefined) { pc.rembg_model = "isnet-anime"; needsSave = true; }
+                if (pc.use_remote_rembg === undefined) { pc.use_remote_rembg = false; needsSave = true; }
+                if (pc.remote_rembg_url === undefined) { pc.remote_rembg_url = ""; needsSave = true; }
+                if (pc.use_local_proxy === undefined) { pc.use_local_proxy = false; needsSave = true; }
+                if (pc.remote_rembg_params === undefined) { pc.remote_rembg_params = JSON.stringify(defaultRemoteRembgParams, null, 2); needsSave = true; }
                 if (pc.character_resolution === undefined) { pc.character_resolution = false; needsSave = true; }
                 if (pc.background_resolution === undefined) { pc.background_resolution = false; needsSave = true; }
                 if (pc.character_width === undefined) { pc.character_width = 1024; needsSave = true; }
@@ -275,72 +367,69 @@ export default {
     },
 
     async loadRembgModels() {
+      // This logic remains the same as it's for local models
       const modelDir = "/data/source/rembg-model";
       try {
         const files = await listDirectory(modelDir);
         const modelNames = files
           .filter(file => !file.isFolder && file.name.toLowerCase().endsWith('.onnx'))
-          .map(file => file.name.replace(/\.onnx$/i, '')); // Case-insensitive extension removal
+          .map(file => file.name.replace(/\.onnx$/i, ''));
 
         if (modelNames.length > 0) {
-          this.rembgModels = modelNames.sort(); // Sort alphabetically
-           // Ensure the currently selected model still exists, otherwise default
+          this.rembgModels = modelNames.sort();
            if (!this.rembgModels.includes(this.rembgModel)) {
-                this.rembgModel = this.rembgModels[0] || "isnet-anime"; // Fallback further if needed
+                this.rembgModel = this.rembgModels[0] || "isnet-anime";
            }
         } else {
-            this.rembgModels = ["isnet-anime"]; // Default if directory is empty
+            this.rembgModels = ["isnet-anime"];
              this.rembgModel = "isnet-anime";
         }
       } catch (error) {
         if (error.message && error.message.includes("目录不存在")) {
           console.log(`Directory ${modelDir} not found, attempting to create.`);
           try {
-            await this.ensureRembgModelDir(); // Create directory
-            this.rembgModels = ["isnet-anime"]; // Set default after creation
+            await this.ensureRembgModelDir();
+            this.rembgModels = ["isnet-anime"];
             this.rembgModel = "isnet-anime";
           } catch (dirError) {
             console.error("创建rembg模型目录时出错:", dirError);
-            this.rembgModels = ["isnet-anime"]; // Fallback default
+            this.rembgModels = ["isnet-anime"];
              this.rembgModel = "isnet-anime";
           }
         } else {
           console.error("加载rembg模型列表时出错:", error);
-          this.rembgModels = ["isnet-anime"]; // Fallback default
+          this.rembgModels = ["isnet-anime"];
            this.rembgModel = "isnet-anime";
         }
       }
     },
     async ensureRembgModelDir() {
-        // Use createFolder which handles nested creation
         const modelDir = "/data/source/rembg-model";
         try {
            await createFolder(modelDir);
            console.log(`Ensured directory exists: ${modelDir}`);
-           // Optional: Create a placeholder file if needed, but createFolder is usually sufficient
-           // await writeFile(`${modelDir}/.placeholder`, "rembg models directory");
         } catch (error) {
-            // Ignore "already exists" errors
             if (!error.message.includes('文件夹已存在') && !error.message.includes('Key already exists')) {
                 console.error(`创建目录 ${modelDir} 时出错:`, error);
-                throw error; // Re-throw critical errors
+                throw error;
             }
         }
     },
     handleModelFileChange(event) {
+      // This logic remains the same
       const files = event.target.files;
       if (files.length > 0) {
         const file = files[0];
         if (file.name.toLowerCase().endsWith('.onnx')) {
           this.modelFile = file;
           this.uploadStatus = `已选择: ${file.name}`;
-          this.uploadSuccess = true; // Mark as ready
+          this.uploadSuccess = true;
         } else {
           this.modelFile = null;
           this.uploadStatus = "错误: 请选择 .onnx 文件";
           this.uploadSuccess = false;
            this.$emit('show-message', { title: "error", message: "请选择 ONNX 格式的模型文件 (.onnx)" });
-           event.target.value = ''; // Clear invalid selection
+           event.target.value = '';
         }
       } else {
         this.modelFile = null;
@@ -348,36 +437,29 @@ export default {
       }
     },
     async uploadModel() {
+      // This logic remains the same
       if (!this.modelFile) {
         this.uploadStatus = "错误: 未选择文件";
         this.uploadSuccess = false;
         return;
       }
-
       this.uploadStatus = "正在上传...";
       this.uploadSuccess = false;
       try {
-        await this.ensureRembgModelDir(); // Ensure directory exists
-
-        // No need for FileReader if writeFile handles Blob/File directly
+        await this.ensureRembgModelDir();
         const filePath = `/data/source/rembg-model/${this.modelFile.name}`;
-        await writeFile(filePath, this.modelFile); // Pass the File object
-
+        await writeFile(filePath, this.modelFile);
         this.uploadStatus = `模型 "${this.modelFile.name}" 上传成功`;
         this.uploadSuccess = true;
-        await this.loadRembgModels(); // Refresh dropdown
-
-        // Select the newly uploaded model
+        await this.loadRembgModels();
         const modelNameOnly = this.modelFile.name.replace(/\.onnx$/i, '');
         if (this.rembgModels.includes(modelNameOnly)) {
              this.rembgModel = modelNameOnly;
-             this.saveProcessingConfig(); // Save selection
+             // Do not auto-save here, let user click save button
         }
-
-        this.$refs.modelFileInput.value = ''; // Clear file input
+        this.$refs.modelFileInput.value = '';
         this.modelFile = null;
          this.$emit('show-message', { title: "success", message: this.uploadStatus });
-
       } catch (error) {
         console.error("上传模型时出错:", error);
         this.uploadStatus = `上传失败: ${error.message}`;
@@ -386,27 +468,45 @@ export default {
       }
     },
     saveProcessingConfig() {
+      this.remoteParamsError = ""; // Clear previous errors
+
+      if (this.useRemoteRembg) {
+        try {
+          JSON.parse(this.remoteRembgParamsText); // Validate JSON
+        } catch (e) {
+          this.remoteParamsError = "参数 JSON 格式无效，请检查。";
+          this.$emit('show-message', { title: "error", message: "远程 Rembg 参数 JSON 格式无效，无法保存。" });
+          this.processingStatus = "保存失败: JSON无效";
+          return; // Prevent save
+        }
+      }
+
       try {
         const configStr = localStorage.getItem('aiGalgameConfig');
         const config = configStr ? JSON.parse(configStr) : {};
         if (!config.AI_draw) config.AI_draw = {};
-        // Initialize sub-object if it doesn't exist
         if (!config.AI_draw.processing_config) config.AI_draw.processing_config = {};
 
-        // Create the processing config object with current values
         const processingConfig = {
+          // Original local rembg settings
           rembg_location: this.rembgLocation || "http://localhost:7000/api/remove",
           rembg_model: this.rembgModel || "isnet-anime",
-          character_resolution: this.characterResolution, // Save boolean
-          background_resolution: this.backgroundResolution, // Save boolean
-           // Save numbers, ensuring they are valid
+
+          // New remote rembg settings
+          use_remote_rembg: this.useRemoteRembg,
+          remote_rembg_url: this.remoteRembgUrl,
+          use_local_proxy: this.useLocalProxy,
+          remote_rembg_params: this.remoteRembgParamsText, // Save as string
+
+          // Resolution settings
+          character_resolution: this.characterResolution,
+          background_resolution: this.backgroundResolution,
           character_width: parseInt(this.characterWidth, 10) || 1024,
           character_height: parseInt(this.characterHeight, 10) || 1024,
           character_resize: this.characterResize,
           background_resize: this.backgroundResize
         };
 
-        // Update the main config object
         config.AI_draw.processing_config = processingConfig;
         localStorage.setItem('aiGalgameConfig', JSON.stringify(config));
 
@@ -420,24 +520,22 @@ export default {
       }
     },
      validateAndSave(type) {
+        // This logic remains the same
         const isWidth = type === 'width';
         let currentValue = isWidth ? this.characterWidth : this.characterHeight;
         let num = parseInt(currentValue, 10);
 
         if (isNaN(num)) {
-            num = 1024; // Default if invalid
+            num = 1024;
         } else {
-             num = Math.max(1, Math.min(4096, num)); // Clamp between 1 and 4096
+             num = Math.max(1, Math.min(4096, num));
         }
 
-        // Update the data property
         if (isWidth) {
             this.characterWidth = num;
         } else {
             this.characterHeight = num;
         }
-
-        // Save the config after validation
         this.saveProcessingConfig();
     }
   },
@@ -458,14 +556,13 @@ export default {
 .separator { border: none; border-top: 1px solid var(--border-color); margin: 15px 0; }
 .thin-separator { margin: 10px 0; border-color: var(--hover-overlay); }
 
-.section-frame { /* uses .card */ margin-bottom: 25px; padding: 20px; }
+.section-frame { margin-bottom: 25px; padding: 20px; }
 .section-title { font-size: 1.1rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 20px; padding-bottom: 8px; border-bottom: 1px dashed var(--border-color); }
 
-/* Form Grid */
 .form-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 15px 25px; /* Row gap, Column gap */
+    gap: 15px 25px;
 }
 .grid-span-2 {
     grid-column: span 2 / span 2;
@@ -474,15 +571,12 @@ export default {
    .grid-span-2 { grid-column: span 1 / span 1; }
 }
 
-.form-group { margin-bottom: 0; } /* Remove margin when inside grid */
+.form-group { margin-bottom: 0; }
 .form-label { display: block; margin-bottom: 6px; color: var(--text-secondary); font-size: 0.95rem; font-weight: 500; }
-.input-field { /* Base for text input and select */ width: 100%; }
-.input { /* From global */ }
-.select { /* From global */ }
+.input, .select, textarea.input { width: 100%; } /* Ensure textarea also takes full width */
 
-/* Rembg Specific */
-.rembg-grid { /* Specific grid layout for rembg */ }
-.model-import-group label { margin-bottom: 8px; } /* Extra space for button row */
+
+.model-import-group label.form-label { margin-bottom: 8px; }
 
 .file-upload-wrapper {
     display: flex;
@@ -494,7 +588,6 @@ export default {
     overflow: hidden; position: absolute; z-index: -1;
 }
 .file-input-label {
-    /* uses .btn .btn-outline .btn-sm */
     cursor: pointer;
     display: inline-flex;
     align-items: center;
@@ -502,9 +595,9 @@ export default {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    max-width: calc(100% - 100px); /* Adjust based on upload button width */
+    max-width: calc(100% - 100px);
     flex-grow: 1;
-    justify-content: flex-start; /* Align text left */
+    justify-content: flex-start;
 }
 .upload-status {
     font-size: 0.85rem;
@@ -517,29 +610,26 @@ export default {
 .upload-status .fa-icon { margin-right: 5px; }
 
 .button-frame { margin-top: 20px; display: flex; }
-.button-frame.single-button { justify-content: flex-end; } /* Align single save button right */
-.button-frame .btn { /* Uses global .btn */ }
+.button-frame.single-button { justify-content: flex-end; }
 
-
-/* Resolution Settings */
 .resolution-section { margin-bottom: 20px; }
 .resolution-section:last-child { margin-bottom: 0; }
 .toggle-row { margin-bottom: 15px; }
 .settings-container {
-    padding-left: 20px; /* Indent settings under toggle */
+    padding-left: 20px;
     margin-top: 10px;
     border-left: 2px solid var(--hover-overlay);
 }
 .resolution-grid { gap: 15px 20px; }
-.size-input { /* uses .input */ max-width: 100px; text-align: center; }
-.medium-select { /* uses .select */ max-width: 150px; }
-.single-col-grid { grid-template-columns: minmax(200px, 300px); } /* Limit width for single column grid */
+.size-input { max-width: 100px; text-align: center; }
+.medium-select { max-width: 150px; }
+.single-col-grid { grid-template-columns: minmax(200px, 300px); }
 .tip-text { margin-top: 10px; }
 .help-text { font-size: 0.85rem; color: var(--text-tertiary); line-height: 1.4; }
+.error-text { color: var(--danger-color, #e74c3c); font-weight: 500; margin-top: 5px; }
 
-/* Shared Switch Styles */
+
 .switch-container { display: flex; align-items: center; gap: 10px; }
-/* Use global .switch styles here */
 .switch { position: relative; display: inline-block; width: 50px; height: 24px; }
 .switch input { opacity: 0; width: 0; height: 0; }
 .switch-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: var(--border-color); transition: .4s; border-radius: 24px; }
@@ -547,13 +637,27 @@ export default {
 .switch input:checked + .switch-slider { background-color: var(--primary-color); }
 .switch input:focus + .switch-slider { box-shadow: 0 0 1px var(--primary-color); }
 .switch input:checked + .switch-slider:before { transform: translateX(26px); }
-/* End global switch styles */
-.switch-label { font-size: 1rem; color: var(--text-primary); cursor: pointer; }
+.switch-label { font-size: 1rem; color: var(--text-primary); cursor: pointer; user-select: none; }
 .label-bold { font-weight: 600; }
 
-
-/* Status Bar */
 .status-frame { margin-top: 20px; padding: 8px 12px; background-color: var(--hover-overlay); border-radius: var(--border-radius-sm); display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem; }
 .status-label { color: var(--text-secondary); font-style: italic; }
 
+/* Ensure textarea for JSON is styled like other inputs */
+textarea.input {
+    padding: 8px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    background-color: var(--input-bg);
+    color: var(--text-input);
+    font-family: inherit; /* Or specify a monospace font for JSON */
+    font-size: 0.9rem;
+    line-height: 1.5;
+    min-height: 100px; /* Give it some default height */
+}
+textarea.input:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px var(--primary-transparent);
+    outline: none;
+}
 </style>

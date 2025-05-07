@@ -1164,13 +1164,8 @@ export async function generateJS(config, imagesDir, prompt, imageName, model) {
 }
 
 
-// --- Post-Processing --- (Rembg replacement - assume handled by API or skip)
 
-// NOTE: Rembg cannot be run locally from the browser via an external tool.
-// This functionality needs to be provided by an API endpoint accessible via fetch,
-// or potentially a WASM build of rembg if available and feasible.
-// For this translation, we'll simulate the 'pass'/'error' logic based on config,
-// but the actual image processing part is omitted or assumed to be done server-side if needed.
+
 
 async function rembgJS(config, imagesDir, imageName, kind, modelName) {
     // 1. 前置检查 (Kind, Config, File Exists) - 与之前相同
@@ -1206,6 +1201,94 @@ async function rembgJS(config, imagesDir, imageName, kind, modelName) {
     const rembg_resolution = processing_config.rembg_resolution || 1024;
     const rembg_debug = processing_config.rembg_debug || false;
     const rembg_timeout = (processing_config.rembg_timeout || 60) * 1000; // 60s timeout
+    const rembg_remote=processing_config.use_remote_rembg|| false;
+    const rembg_url=processing_config.remote_rembg_url|| "http://localhost:7000/api/remove";
+    const remote_rembg_params=processing_config.remote_rembg_params||{};
+    const use_local_proxy=processing_config.use_local_proxy||false;
+    if (rembg_remote === true) {
+        //console.log(`[Main] Using remote rembg for ${baseImageName}.png. URL: ${rembg_url}, Proxy: ${use_local_proxy}`);
+        if (!rembg_url) {
+            console.error(`[Main] Remote rembg is enabled but rembg_url is not configured.`);
+            return "error";
+        }
+
+        try {
+            // 1. Fetch the original image data (ALWAYS use direct fetch, not proxy for this internal read)
+            console.debug(`[Main] Fetching original image from: ${imageReadUrl}`);
+            const imageResponse = await fetch(imageReadUrl);
+            if (!imageResponse.ok) {
+                console.error(`[Main] Failed to fetch original image ${baseImageName}.png for remote rembg: ${imageResponse.status} ${imageResponse.statusText}`);
+                return "error";
+            }
+            const imageBlob = await imageResponse.blob();
+            console.debug(`[Main] Original image fetched successfully. Size: ${imageBlob.size} bytes.`);
+
+            // 2. Prepare FormData
+            const formData = new FormData();
+            formData.append('file', imageBlob); // Server might use the filename
+
+            // Parse remote_rembg_params
+            // remote_rembg_params is either a non-empty string (JSON) or an empty object {}
+            let paramsToAppend = {};
+            if (typeof remote_rembg_params === 'string' && remote_rembg_params.trim() !== '') {
+                try {
+                    paramsToAppend = JSON.parse(remote_rembg_params);
+                    if (typeof paramsToAppend !== 'object' || paramsToAppend === null) {
+                        console.warn(`[Main] Parsed remote_rembg_params (string) resulted in non-object: ${remote_rembg_params}. Using empty parameters.`);
+                        paramsToAppend = {};
+                    }
+                } catch (e) {
+                    console.error(`[Main] Failed to parse remote_rembg_params (string): ${remote_rembg_params}. Error: ${e}. Using empty parameters.`);
+                    paramsToAppend = {};
+                }
+            } else if (typeof remote_rembg_params === 'object' && remote_rembg_params !== null) {
+                // This means it was defaulted to {} by the "|| {}" or was already an object.
+                paramsToAppend = remote_rembg_params;
+            } else {
+                console.warn(`[Main] remote_rembg_params is not a parsable string or object. Using empty parameters. Value:`, remote_rembg_params);
+            }
+            
+            console.debug(`[Main] Appending parameters to FormData:`, paramsToAppend);
+            for (const key in paramsToAppend) {
+                if (Object.hasOwnProperty.call(paramsToAppend, key)) {
+                    formData.append(key, String(paramsToAppend[key])); // FormData values are typically strings
+                }
+            }
+
+            // 3. Make the request (using proxyfetch or fetch)
+            const fetchFn = use_local_proxy ? proxyfetch : fetch;
+            console.debug(`[Main] Sending request to remote rembg service: ${rembg_url} (Proxy: ${use_local_proxy})`);
+
+            const rembgApiResponse = await fetchFn(rembg_url, {
+                method: 'POST',
+                body: formData,
+                // Headers like 'Content-Type: multipart/form-data' are usually set automatically by FormData.
+                // Add 'Accept': 'image/png' or similar if your server specifically requires it.
+            });
+
+            if (!rembgApiResponse.ok) {
+                let errorText = '';
+                try {
+                    errorText = await rembgApiResponse.text();
+                } catch (e) { /* ignore text parsing error */ }
+                console.error(`[Main] Remote rembg API request failed for ${baseImageName}.png: ${rembgApiResponse.status} ${rembgApiResponse.statusText}. Response: ${errorText}`);
+                return "error";
+            }
+
+            // 4. Handle Response - get Blob and write to IndexedDB
+            const processedImageBlob = await rembgApiResponse.blob();
+            console.debug(`[Main] Remote rembg API request successful. Received processed image size: ${processedImageBlob.size} bytes.`);
+
+            // Assuming idbFs.writeFile is available and takes (path, data) and returns a Promise
+            await idbFs.writeFile(finalFilePath, processedImageBlob);
+            console.log(`[Main] Successfully wrote remote rembg result for ${baseImageName}.png to ${finalFilePath}.`);
+            return "success";
+
+        } catch (error) {
+            console.error(`[Main] Error during remote rembg process for ${baseImageName}.png:`, error);
+            return "error";
+        }
+    }
 
     // 2. 创建和管理 Web Worker
     return new Promise((resolve, reject) => {
