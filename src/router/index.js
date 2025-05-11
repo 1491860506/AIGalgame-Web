@@ -12,7 +12,7 @@ import About from '../components/About.vue';
 import Start from '../Start.vue';  // 引入 Start.vue
 import App from '../App.vue'; //引入App.vue 作为 layout
 import Continue from '../Continue.vue' //引入App.vue 作为 layout
-
+import Storygenerator from '../Storygenerator.vue'
 const routes = [
   {
     path: '/',  // 将App.vue作为layout，所有标签页的路由都作为它的子路由
@@ -31,6 +31,7 @@ const routes = [
   },
   { path: '/start', name: 'Start', component: Start },  // /start 路径映射到 Start.vue
   { path: '/continue', name: 'Continue', component: Continue },  // /start 路径映射到 Start.vue
+  { path: '/storygenerator', name: 'Storygenerator', component: Storygenerator },  
 
 
 ];

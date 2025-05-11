@@ -554,12 +554,12 @@ function updateMusicProgress(line) {
         progressState.music.enabled = false;
         progressState.music.progress = '0/1';
         endTaskTimer('music', 'disabled');
-    } else if (line.includes('生成音乐失败') || line.includes('背景音乐生成失败')) {
+    } else if (line.includes('音乐失败')) {
         if (progressState.music.enabled && taskTimeState.music.status !== 'failed') {
             progressState.music.progress = '0/1';
             endTaskTimer('music', 'failed');
         }
-    } else if (line.includes('下载并保存音乐文件')) { // Assuming this means success
+    } else if (line.includes('音乐文件下载完成')) { // Assuming this means success
          if (progressState.music.enabled && taskTimeState.music.status !== 'success') {
             progressState.music.progress = '1/1';
             endTaskTimer('music', 'success');
@@ -690,7 +690,7 @@ function updateVoiceProgressStateMachine(line) {
         voiceProgressState.endTime = Date.now();
         // Assume all non-failed are success if total is known
         if(voiceProgressState.total > 0) {
-             voiceProgressState.success = voiceProgressState.total - voiceProgressState.failed - voiceProgressState.skipped;
+             voiceProgressState.success = voiceProgressState.total - voiceProgressState.failed;
         }
         endTaskTimer('voice', 'success');
     }

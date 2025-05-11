@@ -1,79 +1,45 @@
 <template>
-<div></div>
+  <div>
+    <button @click="generate">Generate Image</button>
+    <img v-if="generatedImage" :src="generatedImage" alt="Generated Image">
+    <p v-if="error">{{ error }}</p>
+  </div>
 </template>
 
+<script>
+import { ref } from 'vue';
+import { generateImagesWithGemini } from './services/gemini-picture'; // Adjust the import path
 
+export default {
+  setup() {
+    const generatedImage = ref('');
+    const error = ref('');
 
-<style scoped>
-.music-generator-test {
-  padding: 20px;
-  font-family: sans-serif;
-}
+    const generate = async () => {
+       error.value = '';
+      try {
 
-.config-section, .generator-section, .status-section, .file-list-section {
-  margin-bottom: 20px;
-  padding: 15px;
-  border: 1px solid #eee;
-  border-radius: 5px;
-}
+        const imagePaths = ['/data/星河彼岸的音律/images/爱丽丝.png', '/data/星河彼岸的音律/images/林晓晨.png']; //Replace with valid paths.
 
-label {
-  display: inline-block;
-  width: 150px;
-  margin-bottom: 5px;
-}
+        const images = await generateImagesWithGemini(
+          "画出两人深情热吻的图片", // Prompt
+          imagePaths // Array of *file paths* in your IndexedDB filesystem
+        );
 
-input[type="text"], input[type="number"] {
-  width: 300px;
-  padding: 5px;
-  margin-bottom: 10px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-}
+         if(images && images.length > 0){
+              generatedImage.value = images[0];  //Show the first image. Adapt to your component
+         } else {
+             console.warn("Gemini API returned successfully, but no image data.")
+             generatedImage.value = '';
+         }
 
-button {
-  padding: 8px 15px;
-  background-color: #007bff;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  margin-right: 10px;
-}
+       } catch (err) {
+        console.error(err)
+        error.value = err.message || "An unexpected error occurred.";
+       }
+    };
 
-button:disabled {
-  background-color: #cccccc;
-  cursor: not-allowed;
-}
-
-.status-section p {
-  font-weight: bold;
-}
-
-.error-message {
-    color: red;
-    font-weight: bold;
-    margin-top: 10px;
-}
-
-.file-list-section ul {
-    list-style: none;
-    padding: 0;
-    margin-top: 10px;
-    max-height: 200px;
-    overflow-y: auto;
-    border: 1px solid #eee;
-    border-radius: 4px;
-    padding: 10px;
-    background-color: #f9f9f9;
-}
-
-.file-list-section li {
-    padding: 5px 0;
-    border-bottom: 1px dashed #ddd;
-}
-
-.file-list-section li:last-child {
-    border-bottom: none;
-}
-</style>
+    return { generatedImage, error, generate };
+  }
+};
+</script>

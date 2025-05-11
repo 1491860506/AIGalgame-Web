@@ -2764,8 +2764,8 @@ export async function getSinglePersonImageJS(characterNames, updateStatus = cons
 
         // Read character.json from IndexedDB
         updateStatus("AI_draw: Reading character data...");
-        const characterData = await idbFs.readFile(characterJsonPath);
-
+        let characterData = await idbFs.readFile(characterJsonPath);
+        //characterData = JSON.parse(await idbFs.readFile(characterJsonPath));
         if (!characterData) {
             return { error: "Failed to read character data." };
         }

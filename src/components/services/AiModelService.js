@@ -306,4 +306,151 @@ function gptDestroy(id) {
   }
 }
 
-export { gpt, gptDestroy };
+
+/**
+ * 发送多轮对话GPT请求 (直接指定模型，无选择/重试逻辑)
+ * @param {string} configName - 配置名称 (e.g., "默认配置") from the main config.
+ * @param {string} modelName - 模型名称 (e.g., "gpt-3.5-turbo") listed under the configName.
+ * @param {string} systemprompt - 系统提示内容. Can be null or empty.
+ * @param {Array<string>} dialogues - 对话列表. Must be non-empty, odd length, alternating user/assistant, ending with user.
+ *                                   Example: ['Hi','Hello! How can I help?','Tell me a joke']
+ * @returns {Promise<string>} The AI's response content, with <think> tags removed.
+ * @throws {Error} If configuration is missing/invalid, input `dialogues` is malformed,
+ *                 or an API request error occurs (network, auth, server-side, bad response).
+ */
+async function gptChat(configName, modelName, systemprompt, dialogues) {
+  if (!Array.isArray(dialogues) || dialogues.length === 0) {
+    throw new Error("Dialogues must be a non-empty array.");
+  }
+  if (dialogues.length % 2 === 0) {
+    throw new Error("Dialogues list must have an odd number of items, ending with a user message.");
+  }
+
+  const messages = [];
+  if (systemprompt && typeof systemprompt === 'string' && systemprompt.trim() !== "") {
+    messages.push({ role: "system", content: systemprompt });
+  }
+
+  for (let i = 0; i < dialogues.length; i++) {
+    if (i % 2 === 0) {
+      messages.push({ role: "user", content: dialogues[i] });
+    } else {
+      messages.push({ role: "assistant", content: dialogues[i] });
+    }
+  }
+
+  // Ensure the last message is from the user, which is implicitly handled by the odd length check.
+  // And ensure at least one non-system message.
+  if (messages.length === 0 || (messages.length === 1 && messages[0].role === "system")) {
+      throw new Error("Dialogues must contain at least one user message.");
+  }
+
+
+  const config = loadConfig();
+  if (!config || !config.模型 || !config.模型.configs) {
+    throw new Error("AI configuration is missing or invalid (模型.configs).");
+  }
+
+  const targetConfigGroup = config.模型.configs[configName];
+  if (!targetConfigGroup) {
+    throw new Error(`Configuration group '${configName}' not found.`);
+  }
+
+  const baseurl = targetConfigGroup.model_baseurl;
+  const apikey = targetConfigGroup.api_key;
+
+  if (!baseurl || typeof baseurl !== 'string' || baseurl.trim() === "") {
+    throw new Error(`API base URL (model_baseurl) is missing or invalid for config group '${configName}'.`);
+  }
+  if (!apikey || typeof apikey !== 'string' || apikey.trim() === "") {
+    throw new Error(`API key (api_key) is missing or invalid for config group '${configName}'.`);
+  }
+
+  const modelList = targetConfigGroup.models;
+  if (!modelList || !Array.isArray(modelList)) {
+    throw new Error(`Model list (models) for config group '${configName}' is missing or not an array.`);
+  }
+
+  const modelInfo = modelList.find(m => m.name === modelName);
+  if (!modelInfo) {
+    throw new Error(`Model '${modelName}' not found in configuration group '${configName}'.`);
+  }
+
+  const requestData = {
+    model: modelName,
+    messages: messages,
+  };
+
+  // Optional parameters from modelInfo
+  const paramsConfig = [
+    { key: "temperature", type: "float" },
+    { key: "top_p", type: "float" },
+    { key: "frequency_penalty", type: "float" },
+    { key: "presence_penalty", type: "float" }, // Added common param
+    { key: "max_tokens", type: "integer" },
+  ];
+
+  for (const param of paramsConfig) {
+    if (modelInfo[param.key] !== undefined && modelInfo[param.key] !== null) {
+      const valueStr = String(modelInfo[param.key]).trim();
+      if (valueStr !== "") {
+        let parsedValue;
+        if (param.type === "float") {
+          parsedValue = parseFloat(valueStr);
+        } else if (param.type === "integer") {
+          parsedValue = parseInt(valueStr, 10);
+        }
+
+        if (isNaN(parsedValue)) {
+          throw new Error(`Invalid ${param.key} value ('${modelInfo[param.key]}') in config for model '${modelName}'. Must be a valid ${param.type}.`);
+        }
+        requestData[param.key] = parsedValue;
+      }
+    }
+  }
+  
+  try {
+    const response = await fetch(`${baseurl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': `Bearer ${apikey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(requestData)
+    });
+
+    if (!response.ok) {
+      let errorBody = null;
+      try {
+          errorBody = await response.text(); // Try to get more details from the body
+      } catch (e) {
+          // Ignore if can't read body
+      }
+      throw new Error(`API request failed with status ${response.status}: ${response.statusText}. Body: ${errorBody || 'N/A'}`);
+    }
+
+    const responseData = await response.json();
+
+    if (!responseData.choices || responseData.choices.length === 0 || !responseData.choices[0].message || !responseData.choices[0].message.content) {
+      throw new Error("Invalid response structure from API.");
+    }
+
+    // As per existing gpt function, remove <think> tags.
+    // Let's assume this is a desired general behavior.
+    let content = responseData.choices[0].message.content;
+    content = content.replace(/<think>[\s\S]*?<\/think>/g, '');
+    
+    return content;
+
+  } catch (error) {
+    // If error is already an Error object, rethrow it. Otherwise, wrap it.
+    if (error instanceof Error) {
+      throw error;
+    } else {
+      throw new Error(`API request failed: ${String(error)}`);
+    }
+  }
+}
+
+export { gpt, gptDestroy,gptChat,loadConfig };

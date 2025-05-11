@@ -529,9 +529,14 @@ export default {
        const backgrounds = { byStory: {}, uncategorized: [] };
 
        // Ensure characterData is an array before mapping
-       const characterNames = new Set(Array.isArray(this.characterData) ? this.characterData.map(char => char && typeof char === 'object' ? char.name : null).filter(Boolean) : []);
-
-
+       const characterNames = new Set(
+    Array.isArray(this.characterData)
+        ? this.characterData
+            .map(char => char && typeof char === 'object' ? char.name : null)
+            .filter(Boolean)
+            .flatMap(name => ['happy', 'sad', 'angry'].map(suffix => `${name}-${suffix}`).concat(name))
+        : []
+);
        this.resourceCategories.images.forEach(file => {
            const imageNameWithoutExt = file.name.replace(/\.png$/, '');
            if (imageNameWithoutExt==="title"){
@@ -539,7 +544,8 @@ export default {
            }
            else if (characterNames.has(imageNameWithoutExt)) {
                characters.push(file);
-           } else {
+           }
+            else {
             let foundInStories = [];
 
             for (const storyId in this.storyData) {

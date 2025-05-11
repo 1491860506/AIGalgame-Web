@@ -23,6 +23,20 @@
            启用后，系统将为故事中的非主要人物也生成 AI 绘画。注意：这会增加 LLM 和 AI 绘图的使用量。
          </p>
        </div>
+
+       <!-- 新增：绘制表情开关 -->
+       <div class="switch-frame">
+        <div class="switch-container">
+          <div class="switch">
+            <input type="checkbox" id="draw-character-emotions-switch" v-model="drawCharacterEmotions" @change="saveCharacterEmotionsSwitch" />
+            <label for="draw-character-emotions-switch" class="switch-slider"></label>
+          </div>
+          <label for="draw-character-emotions-switch" class="switch-label">绘制人物表情</label>
+        </div>
+        <p class="help-text">
+          启用后，系统将根据角色的心情变化生成不同的面部表情。
+        </p>
+      </div>
     </div>
 
     <!-- 模型配置列表区域 -->
@@ -137,6 +151,7 @@ export default {
   data() {
     return {
       drawNonMainCharacter: false,
+      drawCharacterEmotions: true, // 初始化表情开关
       // Ensure each entry has a unique ID for reliable operations after sorting
       characterConfig: [], // Example: [{ id: Date.now(), config: "", weigh: 1, priority: 0 }]
       availableModels: [],
@@ -197,6 +212,7 @@ export default {
           return;
         }
         this.drawNonMainCharacter = config.AI_draw.draw_non_main_character === true;
+        this.drawCharacterEmotions = config.AI_draw.draw_character_emotions === true; // 从配置加载表情开关
 
         // Load config, ensure array, convert numbers, and add unique ID
         let idCounter = Date.now(); // Simple ID generator
@@ -221,6 +237,7 @@ export default {
       let updated = false;
       if (!config.AI_draw) { config.AI_draw = {}; updated = true; }
       if (config.AI_draw.draw_non_main_character === undefined) { config.AI_draw.draw_non_main_character = false; updated = true; }
+      if (config.AI_draw.draw_character_emotions === undefined) { config.AI_draw.draw_character_emotions = true; updated = true; } // 初始化表情开关
       if (!Array.isArray(config.AI_draw.character_config)) {
             const firstModel = this.availableModels.length > 0 ? this.availableModels[0] : "";
             // Add ID here too
@@ -236,12 +253,12 @@ export default {
          });
       }
 
-
        if (updated) {
            try { localStorage.setItem('aiGalgameConfig', JSON.stringify(config)); } catch(e) { console.error("Error saving initialized default:", e); }
        }
 
        this.drawNonMainCharacter = config.AI_draw.draw_non_main_character === true;
+       this.drawCharacterEmotions = config.AI_draw.draw_character_emotions === true; // 初始化表情开关
        let idCounter = Date.now();
        this.characterConfig = (config.AI_draw.character_config || []).map((entry, index) => ({
             ...entry,
@@ -263,6 +280,20 @@ export default {
         console.error("保存开关状态时出错:", error);
       }
     },
+    // 新增：保存表情开关状态
+    saveCharacterEmotionsSwitch() {
+      try {
+        const configStr = localStorage.getItem('aiGalgameConfig');
+        const config = configStr ? JSON.parse(configStr) : {};
+        if (!config.AI_draw) config.AI_draw = {};
+        config.AI_draw.draw_character_emotions = this.drawCharacterEmotions;
+        localStorage.setItem('aiGalgameConfig', JSON.stringify(config));
+        this.$emit('show-message', { title: "success", message: `绘制人物表情已${this.drawCharacterEmotions ? '启用' : '禁用'}` });
+      } catch (error) {
+        this.$emit('show-message', { title: "error", message: `保存表情开关状态出错: ${error.message}` });
+        console.error("保存表情开关状态时出错:", error);
+      }
+    },
     saveCharacterConfig() {
       try {
         // Save the data directly from characterConfig (which holds the current state)
@@ -275,7 +306,6 @@ export default {
              priority: parseInt(entry.priority || '0', 10) || 0
              // DO NOT save the temporary 'id' field
           }));
-
 
         const configStr = localStorage.getItem('aiGalgameConfig');
         const config = configStr ? JSON.parse(configStr) : {};
@@ -387,7 +417,6 @@ export default {
 
 <style scoped>
 /* --- Styles are largely the same, just update column flex values --- */
-.tab-content-container { }
 .title-frame { margin-bottom: 15px; }
 .title-label { font-size: 1.4rem; font-weight: 600; color: var(--text-primary); margin-bottom: 2px; }
 .subtitle-label { font-size: 0.95rem; color: var(--text-secondary); }

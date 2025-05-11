@@ -13,7 +13,7 @@
 import { ref, onMounted, onUnmounted } from 'vue';
 import * as idbFs from './components/services/IndexedDBFileSystem'; // Adjust path if needed
 import { useApiEndpoints } from './components/services/useStoryContinue'; // Adjust path if needed
-
+import {getChoiceText} from './components/services/ChoiceManager';
 // --- Reactive State ---
 const status = ref('Initializing...'); // Overall status for UI display
 const currentTitle = ref(null);       // Loaded from /data/source/title.txt
@@ -119,10 +119,18 @@ const processTask = async (content) => {
 
         // 2. Determine action based on content and call generation API
         if (isNumeric) {
+            const choicetext=await getChoiceText(id);
             const id = parseFloat(content);
-            taskType = 'continue';
-            updateStatus(`Generating Text (ID: ${id})...`);
-            generationPromise = api.callTextGeneration('none', id);
+            if(choicetext==='结束游戏'){
+                taskType = 'end';
+                updateStatus(`Generating End Sequence (ID: ${id})...`);
+                generationPromise = api.callEndGeneration('none', id);
+            }
+            else{
+                taskType = 'continue';
+                updateStatus(`Generating Text (ID: ${id})...`);
+                generationPromise = api.callTextGeneration('none', id);
+            }
         } else if (isABFormat) {
             const parts = content.split('-');
             // Handle potential multiple hyphens in b: use slice(1).join('-')
@@ -132,8 +140,9 @@ const processTask = async (content) => {
             if (!a || b === undefined || b === null) { // Basic validation
                 throw new Error(`Invalid a-b format: a='${a}', b='${b}'`);
             }
+            const choicetext=await getChoiceText(b);
 
-            if (b === '结束游戏') {
+            if (b === '结束游戏'||choicetext==='结束游戏') {
                 taskType = 'end';
                 updateStatus(`Generating End Sequence (ID: ${a})...`);
                 generationPromise = api.callEndGeneration(a);
@@ -339,29 +348,3 @@ onUnmounted(() => {
 });
 
 </script>
-
-<style scoped>
-/* Add simple styling if desired */
-div {
-    font-family: sans-serif;
-    padding: 15px;
-    margin: 10px;
-    border: 1px solid #ccc;
-    border-radius: 8px;
-    background-color: #f8f9fa;
-    max-width: 500px;
-}
-h1 {
-    margin-top: 0;
-    font-size: 1.5em;
-    color: #333;
-}
-p {
-    margin: 8px 0;
-    line-height: 1.4;
-    color: #555;
-}
-strong {
-    color: #0056b3;
-}
-</style>

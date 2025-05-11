@@ -707,6 +707,8 @@ async function generateSceneTxt(sceneIdOrKey, title) {
     // --- Process Conversation Data ---
     let previousPlace = null;
     let previousCharacter = null;
+    let previousFigureFilename = null;
+    let previousExpression = null;
 
     if (baseSceneId === '0') { // Special handling for start scene (use base ID)
       outputLines.push('bgm:background1.mp3;');
@@ -717,6 +719,7 @@ async function generateSceneTxt(sceneIdOrKey, title) {
       const currentCharacter = conv.character || "";
       const text = conv.text || "";
       const convId = conv.id; // Assume ID exists
+      const currentExpression = conv.expression || "";
 
       if (convId === undefined || convId === null) {
         console.warn(`[SW generateSceneTxt] Missing 'id' in conversation for base scene ${baseSceneId}. Skipping audio ref. Line:`, conv);
@@ -729,9 +732,40 @@ async function generateSceneTxt(sceneIdOrKey, title) {
       }
 
       // Character -> changeFigure
-      const figureFilename = currentCharacter ? `${encodeURIComponent(currentCharacter)}.png` : 'none';
-      if (currentCharacter !== previousCharacter) { // Check if character changed or is set initially
-        outputLines.push(`changeFigure:${figureFilename} -next;`);
+      let figureFilename = 'none';
+      if (currentCharacter) {
+        const encodedCharacter = encodeURIComponent(currentCharacter);
+        // Determine the filename based on expression.  Treat missing or null expression the same as ""
+        const effectiveExpression = conv.hasOwnProperty('expression') ? currentExpression : "";
+
+        if (effectiveExpression) {
+          if(['sad', 'happy', 'angry'].includes(effectiveExpression)) {
+
+            figureFilename = `${encodedCharacter}-${effectiveExpression}.png`;
+
+          } else {
+            figureFilename = `${encodedCharacter}.png`;
+          }
+        } else {
+          figureFilename = `${encodedCharacter}.png`;
+        }
+      }
+
+      if (currentCharacter !== previousCharacter || figureFilename !== previousFigureFilename) { // Check if character *or* specific figure has changed
+          let expressionChanged = false;
+
+          //check expression change if figureFilename same and expression not empty
+          if(figureFilename === previousFigureFilename && currentCharacter){
+              const effectivePreviousExpression = previousCharacter && previousExpression !== null && previousExpression !== undefined ? previousExpression: '';
+              if(effectivePreviousExpression !== currentExpression){
+                  expressionChanged = true;
+              }
+          }
+
+          if(figureFilename !== previousFigureFilename || expressionChanged){
+              outputLines.push(`changeFigure:${figureFilename} -next;`);
+          }
+
       }
 
       // Dialogue Text and Audio
@@ -751,6 +785,8 @@ async function generateSceneTxt(sceneIdOrKey, title) {
       // Update previous state
       previousPlace = currentPlace;
       previousCharacter = currentCharacter;
+      previousFigureFilename = figureFilename;
+      previousExpression = currentExpression;
     }
 
     // --- Process Choice Data ---
@@ -810,9 +846,15 @@ async function generateSceneTxt(sceneIdOrKey, title) {
       }
 
     } else {
-      // console.log(`[SW generateSceneTxt] No choices found for scene key "${sceneIdOrKey}" in ${choiceJsonPath}`);
-      // If no choices, maybe add a default next scene command?
-      // Example: outputLines.push(`changeScene:${parseInt(baseSceneId, 10) + 1}.txt;`); // Needs careful handling of last scene
+      outputLines.push(':游戏结束;');
+      outputLines.push('end;');
+      try{
+        await readFile(`/data/${title}/music/end_${baseSceneId}.mp3`);
+        outputLines.unshift(`bgm:end_${baseSceneId}.mp3;`);
+      }
+      catch(e){
+        
+      }
     }
 
     return outputLines.join('\n');
@@ -1052,6 +1094,7 @@ self.addEventListener('fetch', (event) => {
   if (method === 'GET' && requestedPath.startsWith('/webgal/game/scene/')) {
     const fileName = requestedPath.substring('/webgal/game/scene/'.length);
     let sceneIdOrKey = null; // Will hold '0', '123', '123-abc', etc.
+    let realKey=null;
     let isChoiceShortcut = false;
     let isReadStatusRequest = false;
     let statusId = null; // For read-status requests
@@ -1064,6 +1107,7 @@ self.addEventListener('fetch', (event) => {
       console.log(`[SW] Intercepting ${method} ${requestedPath}. Handling read-status request for ID: "${statusId}".`);
     } else if (fileName === 'start.txt') {
       sceneIdOrKey = '0';
+      realKey='0';
       console.log(`[SW] Intercepting ${method} ${requestedPath}. Handling scene ID "0".`);
     } else if (fileName.startsWith('choice-')) {
       // Handle the choice shortcut directly
@@ -1090,11 +1134,13 @@ self.addEventListener('fetch', (event) => {
         } else {
           // Treat as a standard compound scene ID
           sceneIdOrKey = `${a}-${decodeURIComponent(b)}`; // Use the full 'a-b' as the key
+          realKey=b;
           console.log(`[SW] Intercepting ${method} ${requestedPath}. Handling compound scene key "${sceneIdOrKey}".`);
         }
       } else if (sceneMatch) {
         // Simple scene ID (numeric or potentially alphanumeric)
         sceneIdOrKey = sceneMatch[1];
+        realKey=sceneMatch[1];
         console.log(`[SW] Intercepting ${method} ${requestedPath}. Handling scene ID "${sceneIdOrKey}".`);
       }
     }
@@ -1201,7 +1247,7 @@ self.addEventListener('fetch', (event) => {
           }
 
           // Determine the base scene ID for checking the story JSON file
-          const baseSceneIdToCheck = sceneIdOrKey;
+          const baseSceneIdToCheck = realKey;
           const storyJsonPath = `/data/${dynamicTitle}/story/${baseSceneIdToCheck}.json`;
 
           try {
@@ -1209,7 +1255,9 @@ self.addEventListener('fetch', (event) => {
             // console.log(`[SW scene] Checking existence of: ${storyJsonPath}`);
             await readFile(storyJsonPath); // If this succeeds, the file exists
             // console.log(`[SW scene] Story JSON found: ${storyJsonPath}. Proceeding with generation.`);
-
+            if(realKey!==sceneIdOrKey){
+            return createTextResponse(`changeScene:${realKey}.txt;`, 200, false)
+            }
             // If JSON exists, generate the TXT content
             const sceneContent = await generateSceneTxt(sceneIdOrKey, dynamicTitle); // Pass the *original* key and title
             return createTextResponse(sceneContent, 200, false); // No cache for dynamic scenes
@@ -1219,6 +1267,10 @@ self.addEventListener('fetch', (event) => {
               if (sceneIdOrKey === 'fail') {
                 const responseBody = `:生成失败;\nend;`;
                 return createTextResponse(responseBody, 200, false); // No cache
+              }
+              if(sceneIdOrKey === '0'){
+                return createTextResponse(`:没有开头文本;\nend;`, 200, false);
+
               }
               // *** STORY JSON NOT FOUND - Trigger Process ① ***
               console.log(`[SW scene] Story JSON not found: ${storyJsonPath}. Initiating generation process for scene key: ${sceneIdOrKey}.`);

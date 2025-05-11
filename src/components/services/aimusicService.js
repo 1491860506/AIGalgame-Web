@@ -1235,7 +1235,7 @@ class MusicGenerator {
             console.error(errorMsg);
             return false;
         }
-        const baseUrl = `https://api.acedata.cloud/${modelName}/audios`;
+        let baseUrl = `https://api.acedata.cloud/${modelName}/audios`;
 
         const headers = {
             'Authorization': `Bearer ${apiKey}`,
@@ -1253,7 +1253,7 @@ class MusicGenerator {
              if (instrumental) {
                  apiPayload = {
                      "action": "generate",
-                     "model": "chirp-v4",
+                     "model": "chirp-v4-5",
                      "instrumental": true,
                      "custom": false, // Explicitly false for instrumental
                      "prompt": prompt,
