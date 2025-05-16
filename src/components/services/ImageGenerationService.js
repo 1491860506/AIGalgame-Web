@@ -995,7 +995,7 @@ export async function generateJS(config, imagesDir, prompt, imageName, model) {
 
 
         // --- Second request loop ---
-        const max_poll_attempts = 600;
+        const max_poll_attempts = 60;
         const poll_interval = 1000;
 
         for (let attempt = 0; attempt < max_poll_attempts; attempt++) {

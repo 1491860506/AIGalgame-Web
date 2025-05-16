@@ -1,122 +1,29 @@
-# Vue.js Story Generator Application
+# test
 
-A modern Vue.js 3 application built with Vite, featuring story generation capabilities and image processing functionality.
+This template should help get you started developing with Vue 3 in Vite.
 
-## Features
+## Recommended IDE Setup
 
-- Story generation interface
-- Modern UI with FontAwesome icons
-- Image background removal using ONNX Runtime
-- JSON visualization with vue-json-pretty
-- Toast notifications for better user experience
-- Routing with Vue Router
+[VSCode](https://code.visualstudio.com/) + [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur).
 
-## Project Structure
+## Customize configuration
 
-```
-├── src/                    # Source code
-│   ├── assets/            # Static assets
-│   ├── components/        # Vue components
-│   ├── router/           # Vue Router configuration
-│   ├── App.vue           # Root Vue component
-│   ├── main.js           # Application entry point
-│   ├── Start.vue         # Start page component
-│   ├── Continue.vue      # Continue page component
-│   └── Storygenerator.vue # Story generation component
-├── public/                # Public static assets
-├── dist/                  # Production build output
-└── electron/              # Electron app configuration
+See [Vite Configuration Reference](https://vite.dev/config/).
+
+## Project Setup
+
+```sh
+npm install
 ```
 
-## Prerequisites
+### Compile and Hot-Reload for Development
 
-- Node.js (Latest LTS version recommended)
-- npm or yarn package manager
+```sh
+npm run dev
+```
 
-## Development Setup
+### Compile and Minify for Production
 
-1. Clone the repository:
-   ```sh
-   git clone <repository-url>
-   cd <project-directory>
-   ```
-
-2. Install dependencies:
-   ```sh
-   npm install
-   # or
-   yarn install
-   ```
-
-3. Start the development server:
-   ```sh
-   npm run dev
-   # or
-   yarn dev
-   ```
-
-4. Preview production build:
-   ```sh
-   npm run preview
-   # or
-   yarn preview
-   ```
-
-## Building for Production
-
-Build the application for production:
 ```sh
 npm run build
-# or
-yarn build
 ```
-
-The built files will be in the `dist` directory.
-
-## Deployment
-
-The project can be deployed using the following command:
-```sh
-npm run deploy
-# or
-yarn deploy
-```
-
-This will deploy the application to GitHub Pages.
-
-## Dependencies
-
-### Main Dependencies
-- Vue.js 3 - Progressive JavaScript framework
-- Vue Router - Official router for Vue.js
-- FontAwesome - Icon library
-- ONNX Runtime Web - Machine learning inference
-- Vue Toastification - Toast notifications
-- Vue JSON Pretty - JSON visualization
-
-### Development Dependencies
-- Vite - Next generation frontend tooling
-- VitePress - Static site generator
-- Vue DevTools - Development tools for Vue
-
-## IDE Setup
-
-For the best development experience, we recommend:
-- [VSCode](https://code.visualstudio.com/)
-- [Volar Extension](https://marketplace.visualstudio.com/items?itemName=Vue.volar)
-- Disable Vetur if installed
-
-## Configuration
-
-The project uses Vite as its build tool. You can customize the configuration in:
-- `vite.config.js` - Vite configuration
-- `jsconfig.json` - JavaScript configuration
-- `vercel.json` - Vercel deployment configuration
-
-## License
-
-[Add your license information here]
-
-## Contributing
-
-[Add contribution guidelines here]
