@@ -91,7 +91,7 @@
 
     <!-- Footer Section -->
     <div class="footer-section">
-      <button class="btn btn-text" @click="openUrl('https://github.com/1491860506/AIGal')">
+      <button class="btn btn-text" @click="openUrl('https://github.com/mengruoa/AIGalgame-Web')">
         <font-awesome-icon :icon="['fab', 'github']" />
         GitHub
       </button>

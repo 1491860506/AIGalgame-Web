@@ -66,6 +66,7 @@
                       v-model="setting.config"
                       class="select setting-select"
                        title="选择配置"
+                        @change=this.loadModelNames()
                     >
                       <option value="" disabled>-- 选择配置 --</option>
                       <option v-for="name in configNames" :key="name" :value="name">
