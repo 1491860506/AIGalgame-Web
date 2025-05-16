@@ -54,10 +54,9 @@
                  <p v-if="sortedSettings.length === 0" class="info-message">
                      暂无设置，请点击“新增设置”。
                  </p>
-                 <!-- *** MODIFICATION: Use computed sortedSettings *** -->
                 <div
                   v-for="(setting, index) in sortedSettings"
-                  :key="setting.id" 
+                  :key="setting.id"
                   class="setting-row"
                   :class="{ 'odd-row': index % 2 !== 0 }"
                 >
@@ -65,8 +64,8 @@
                     <select
                       v-model="setting.config"
                       class="select setting-select"
-                       title="选择配置"
-                        @change=this.loadModelNames()
+                      title="选择配置"
+                      @change="onSettingConfigChange(setting)" 
                     >
                       <option value="" disabled>-- 选择配置 --</option>
                       <option v-for="name in configNames" :key="name" :value="name">
@@ -80,7 +79,7 @@
                       v-model="setting.model"
                       class="select setting-select"
                       :disabled="!setting.config || (modelsByConfig[setting.config] || []).length === 0"
-                       title="选择模型"
+                      title="选择模型"
                     >
                      <option value="" disabled>-- 选择模型 --</option>
                       <option
@@ -97,7 +96,7 @@
                   <div class="setting-cell setting-weight">
                     <input
                       type="number"
-                      v-model="setting.weight"
+                      v-model.number="setting.weight" 
                       class="input setting-input"
                       @input="validatePositiveInt($event, setting, 'weight')"
                       placeholder="权重 (正整数)"
@@ -108,7 +107,7 @@
                   <div class="setting-cell setting-priority">
                     <input
                       type="number"
-                      v-model="setting.priority"
+                      v-model.number="setting.priority" 
                       class="input setting-input"
                       @input="validateNatureInt($event, setting, 'priority')"
                       placeholder="优先级 (整数)"
@@ -117,8 +116,7 @@
                     />
                   </div>
                   <div class="setting-cell setting-action">
-                    <!-- Find original index to delete -->
-                    <button class="btn btn-danger btn-sm btn-icon-only" @click="deleteSetting(findIndexInOriginal(setting))" title="删除此行设置">
+                    <button class="btn btn-danger btn-sm btn-icon-only" @click="deleteSetting(setting)" title="删除此行设置"> <!-- Pass setting object directly -->
                       <font-awesome-icon :icon="['fas', 'trash-alt']" />
                     </button>
                   </div>
@@ -179,11 +177,11 @@
               >
                 <option value="" disabled>-- 选择编号 --</option>
                 <option
-                  v-for="id in idOptions"
-                  :key="id"
-                  :value="id"
+                  v-for="idVal in idOptions"
+                  :key="idVal"
+                  :value="idVal"
                 >
-                  {{ id }}
+                  {{ idVal }}
                 </option>
                  <option v-if="selectedKind && idOptions.length === 0" value="" disabled>无可用编号</option>
                  <option v-if="!selectedKind" value="" disabled>先选类型</option>
@@ -223,7 +221,6 @@
       </div>
     </div>
 
-    <!-- *** MODIFICATION: Wrapped Test Result Modal in standard .modal overlay *** -->
     <div class="modal" v-if="showTestResultModal" @click.self="closeTestResultModal">
         <div class="modal-content test-result-modal-content card">
             <div class="modal-header">
@@ -233,7 +230,7 @@
             </button>
             </div>
             <div class="modal-body">
-            <div class="result-tabs tab-navigation"> <!-- Reuse tab nav style -->
+            <div class="result-tabs tab-navigation">
                 <button
                     class="tab-item result-tab"
                     :class="{ active: activeResultTab === 'prompt1' }"
@@ -268,7 +265,6 @@
       </div>
     </div>
 
-    <!-- Import/Export File Dialog -->
     <input
       type="file"
       ref="fileInput"
@@ -280,8 +276,8 @@
 </template>
 
 <script>
-import { processPrompt } from './services/PromptService'; // 确保路径正确
-import { v4 as uuidv4 } from 'uuid'; // Import uuid for unique keys
+import { processPrompt } from './services/PromptService';
+import { v4 as uuidv4 } from 'uuid';
 
 export default {
   name: 'LLMConfig_modelaccess',
@@ -291,11 +287,10 @@ export default {
       tabs: ['默认', '大纲', '正文', '选项', '人物', '背景', '音乐', '对话', '总结', '本地导入', '其他', '提示词'],
       activeTab: '默认',
       configNames: [],
-      modelNames: [],
+      // modelNames: [], // Not directly used, modelsByConfig is primary
       modelsByConfig: {},
-      settings: [], // Original settings array
+      settings: [],
 
-      // Prompt Config state... (same as before)
       kindNumberData: [ { kind: "大纲", number: 6 }, { kind: "选项", number: 6 }, { kind: "故事开头", number: 6 }, { kind: "故事继续", number: 6 }, { kind: "故事结尾", number: 6 }, { kind: "全部人物绘画", number: 2 }, { kind: "单个人物绘画", number: 2 }, { kind: "故事地点绘画", number: 2 }, { kind: "背景音乐生成", number: 2 }, { kind: "开头音乐生成", number: 6 }, { kind: "结尾音乐生成", number: 6 }, { kind: "故事总结", number: 6 }, { kind: "本地导入", number: 6 }, { kind: "重写提示词", number: 1 }, { kind: "首页背景生成", number: 2 }, { kind: "翻译", number: 6 } ],
       selectedKind: '',
       selectedId: '',
@@ -306,78 +301,79 @@ export default {
       currentId: '',
       statusMessage: '准备就绪',
 
-      // Test Result state... (same as before)
       showTestResultModal: false,
       activeResultTab: 'prompt1',
       testResult: { prompt1: '', prompt2: '' },
 
-      // File Upload state... (same as before)
       fileUploadType: null
     };
   },
-  // *** MODIFICATION: Added computed property for sorting ***
   computed: {
       sortedSettings() {
-        // Create a shallow copy to avoid mutating the original array during sort
-        // Add a unique temporary id to each setting if it doesn't have one,
-        // needed for reliable v-for key and finding original index
-        const settingsWithId = this.settings.map(s => ({ ...s, id: s.id || uuidv4() }));
-
-        return settingsWithId.sort((a, b) => {
+        // Create a shallow copy of the array for sorting,
+        // but the objects inside are references to the original objects in this.settings.
+        // This ensures v-model updates the original data.
+        // Ensure all settings have an ID for the :key binding.
+        // IDs are assigned in loadSettings and addSetting.
+        return [...this.settings].sort((a, b) => {
             const priorityA = parseInt(a.priority || '0', 10);
             const priorityB = parseInt(b.priority || '0', 10);
-            // Sort descending (higher priority first)
-            return priorityB - priorityA;
+            return priorityB - priorityA; // Sort descending
         });
       }
   },
   mounted() {
-    this.loadConfigNames();
-    this.loadModelNames();
-    this.handleTabChange(this.activeTab);
+    this.loadConfigNames(); // Load all available config names
+    this.loadAllModelNames(); // Load all models for all configs
+    this.handleTabChange(this.activeTab); // Load settings for the current tab
   },
    watch: {
       activeTab(newTab) {
            this.handleTabChange(newTab);
       },
-      'settings': {
+      'settings': { // Simplified watcher
         deep: true,
-        handler(newSettings, oldSettings) {
+        handler(newSettings) {
           if (this.activeTab === '提示词') return;
-          if (newSettings && oldSettings) {
-            for (let i = 0; i < newSettings.length; i++) {
-              // Add unique ID if missing (needed for deleting from sorted list)
-              if (!newSettings[i].id) {
-                 newSettings[i].id = uuidv4();
+          if (newSettings) {
+            newSettings.forEach(setting => {
+              if (!setting.id) {
+                 setting.id = uuidv4(); // Defensive: ensure ID
               }
-              if (i < oldSettings.length && newSettings[i].config !== oldSettings[i].config) {
-                  const configModels = this.modelsByConfig[newSettings[i].config] || [];
-                  if (configModels.length > 0 && !configModels.includes(newSettings[i].model)) {
-                      newSettings[i].model = configModels[0];
-                  } else if (configModels.length === 0) {
-                       newSettings[i].model = '';
+              // If a setting has a config but its model is not valid or missing,
+              // and models are available for that config, default to the first model.
+              // This helps initialize/correct models, especially for new rows or loaded data.
+              if (setting.config) {
+                const configModels = this.modelsByConfig[setting.config] || [];
+                if (configModels.length > 0) {
+                  if (!setting.model || !configModels.includes(setting.model)) {
+                    setting.model = configModels[0];
                   }
-              } else if (i >= oldSettings.length) {
-                  const configModels = this.modelsByConfig[newSettings[i].config] || [];
-                  if (configModels.length > 0 && !configModels.includes(newSettings[i].model)) {
-                       newSettings[i].model = configModels[0];
-                  } else if (configModels.length === 0) {
-                      newSettings[i].model = '';
+                } else {
+                  // No models for this config, ensure model is empty
+                  if (setting.model) {
+                    setting.model = '';
+                  }
+                }
+              } else {
+                // No config selected, ensure model is empty
+                 if (setting.model) {
+                    setting.model = '';
                   }
               }
-            }
+            });
           }
         }
       }
     },
   methods: {
-    // *** MODIFICATION: Helper to find original index using the temporary ID ***
-    findIndexInOriginal(settingToFind) {
-        return this.settings.findIndex(s => s.id === settingToFind.id);
-    },
+    // findIndexInOriginal is no longer needed if deleteSetting takes the setting object
+    // findIndexInOriginal(settingToFind) {
+    //     return this.settings.findIndex(s => s.id === settingToFind.id);
+    // },
     handleTabChange(newTab) {
          if (newTab !== '提示词') {
-            this.loadSettings();
+            this.loadSettings(); // This will load and potentially correct models via watcher
           } else {
              if (this.kindNumberData.length > 0) {
                 if (!this.selectedKind) { this.selectedKind = this.kindNumberData[0].kind; }
@@ -389,65 +385,118 @@ export default {
     },
     loadConfigNames() {
       try {
-        const config = JSON.parse(localStorage.getItem('aiGalgameConfig') || '{}');
-        if (config.模型 && config.模型.configs) { this.configNames = Object.keys(config.模型.configs).sort(); }
-      } catch (error) { console.error('Failed to load config names:', error); this.showMessage('error', '加载LLM配置名称失败'); }
+        const configData = JSON.parse(localStorage.getItem('aiGalgameConfig') || '{}');
+        if (configData.模型 && configData.模型.configs) {
+          this.configNames = Object.keys(configData.模型.configs).sort();
+        } else {
+          this.configNames = [];
+        }
+      } catch (error) {
+        console.error('Failed to load config names:', error);
+        this.showMessage('error', '加载LLM配置名称失败');
+        this.configNames = [];
+      }
     },
-    loadModelNames() {
+    loadAllModelNames() { // Renamed from loadModelNames to be more specific
       try {
-        const config = JSON.parse(localStorage.getItem('aiGalgameConfig') || '{}');
-        this.modelsByConfig = {};
-        if (config.模型 && config.模型.configs) {
-          for (const configName in config.模型.configs) {
-            const models = config.模型.configs[configName].models || [];
-            this.modelsByConfig[configName] = Array.isArray(models) ? models.map(model => model.name) : [];
+        const configData = JSON.parse(localStorage.getItem('aiGalgameConfig') || '{}');
+        const newModelsByConfig = {};
+        if (configData.模型 && configData.模型.configs) {
+          for (const configName in configData.模型.configs) {
+            const models = configData.模型.configs[configName].models || [];
+            newModelsByConfig[configName] = Array.isArray(models) ? models.map(model => model.name).sort() : [];
           }
         }
-      } catch (error) { console.error('Failed to load model names:', error); this.showMessage('error', '加载LLM模型列表失败'); }
+        this.modelsByConfig = newModelsByConfig;
+      } catch (error) {
+        console.error('Failed to load all model names:', error);
+        this.showMessage('error', '加载LLM模型列表失败');
+        this.modelsByConfig = {};
+      }
+    },
+    onSettingConfigChange(setting) {
+        // v-model has already updated setting.config
+        const newConfig = setting.config;
+        const modelsForNewConfig = this.modelsByConfig[newConfig] || [];
+
+        if (modelsForNewConfig.length > 0) {
+            // Set to the first model of the new config.
+            // This is typical behavior: when config changes, model selection resets or defaults.
+            setting.model = modelsForNewConfig[0];
+        } else {
+            setting.model = ''; // No models for this config, clear model selection
+        }
+        // The watcher on 'settings' will also run, but this direct change is more immediate for UI feedback.
     },
     loadSettings() {
        if (this.activeTab === '提示词') return;
       try {
-        const config = JSON.parse(localStorage.getItem('aiGalgameConfig') || '{}');
+        const configData = JSON.parse(localStorage.getItem('aiGalgameConfig') || '{}');
         const settingKey = `${this.activeTab}_setting`;
-        const savedSettings = config?.模型?.[settingKey];
+        const savedSettings = configData?.模型?.[settingKey];
+
         if (Array.isArray(savedSettings)) {
-          this.settings = savedSettings.map(setting => {
-             const configModels = this.modelsByConfig[setting.config] || [];
-             let model = setting.model || '';
-             if (model && !configModels.includes(model)) { model = configModels.length > 0 ? configModels[0] : ''; }
-             else if (!model && configModels.length > 0) { model = configModels[0]; }
+          this.settings = savedSettings.map(s => {
+             const currentConfig = s.config || '';
+             let currentModel = s.model || '';
+             const configModels = this.modelsByConfig[currentConfig] || [];
+
+             if (currentConfig) { // Only validate/default model if a config is present
+                if (configModels.length > 0) {
+                    if (!currentModel || !configModels.includes(currentModel)) {
+                        currentModel = configModels[0]; // Default to first model if saved is invalid or missing
+                    }
+                } else {
+                    currentModel = ''; // No models for this config
+                }
+             } else {
+                 currentModel = ''; // No config, so no model
+             }
+
               return {
-                 config: setting.config || '',
-                 model: model,
-                 weight: setting.weigh?.toString() || '1',
-                 priority: setting.priority?.toString() || '0',
-                 id: uuidv4() // Assign unique ID on load for keying/deleting
+                 config: currentConfig,
+                 model: currentModel,
+                 weight: s.weigh?.toString() || '1', // Ensure string for input
+                 priority: s.priority?.toString() || '0', // Ensure string for input
+                 id: uuidv4() // Assign unique ID on load
              };
           });
-        } else { this.settings = []; }
-      } catch (error) { console.error(`Failed to load settings for ${this.activeTab}:`, error); this.showMessage('error', `加载 ${this.activeTab} 设置失败`); }
+        } else {
+          this.settings = [];
+        }
+      } catch (error) {
+        console.error(`Failed to load settings for ${this.activeTab}:`, error);
+        this.showMessage('error', `加载 ${this.activeTab} 设置失败`);
+        this.settings = [];
+      }
     },
     addSetting() {
-       let initialConfig = ''; let initialModel = '';
+       let initialConfig = '';
+       let initialModel = '';
        if (this.configNames.length > 0) {
            initialConfig = this.configNames[0];
            const modelsForFirstConfig = this.modelsByConfig[initialConfig] || [];
-           if (modelsForFirstConfig.length > 0) { initialModel = modelsForFirstConfig[0]; }
+           if (modelsForFirstConfig.length > 0) {
+               initialModel = modelsForFirstConfig[0];
+           }
        }
       this.settings.push({
-        config: initialConfig, model: initialModel, weight: '1', priority: '0', id: uuidv4() // Add ID
+        config: initialConfig,
+        model: initialModel,
+        weight: '1', // String for input
+        priority: '0', // String for input
+        id: uuidv4() // Add ID
       });
       this.$nextTick(() => {
         const container = this.$refs.settingsContainer; if (container) { container.scrollTop = container.scrollHeight; }
       });
     },
-    // *** MODIFICATION: Use original index found via ID ***
-    deleteSetting(originalIndex) {
-      if (originalIndex >= 0 && originalIndex < this.settings.length) {
-         this.settings.splice(originalIndex, 1);
+    deleteSetting(settingToDelete) { // Takes the setting object
+      const indexToDelete = this.settings.findIndex(s => s.id === settingToDelete.id);
+      if (indexToDelete !== -1) {
+         this.settings.splice(indexToDelete, 1);
       } else {
-           console.warn("Could not find setting to delete with index:", originalIndex);
+           console.warn("Could not find setting to delete with id:", settingToDelete.id);
       }
     },
     saveSettings() {
@@ -457,60 +506,95 @@ export default {
           const setting = this.settings[i];
           if (!setting.config) { this.showMessage('error', `配置项不能为空 (行: ${i + 1})`); return; }
           const modelsForConfig = this.modelsByConfig[setting.config] || [];
-          if (!setting.model || !modelsForConfig.includes(setting.model)) { this.showMessage('error', `模型项无效或为空 (行: ${i + 1})`); return; }
-          if (!setting.weight || !this.isPositiveInt(setting.weight)) { this.showMessage('error', `权重必须是正整数 (行: ${i + 1})`); return; }
+          if (!setting.model || !modelsForConfig.includes(setting.model)) {
+             // If there are models for the config, but none is selected or it's invalid, show error.
+             // If there are no models for the config, an empty model is acceptable if the logic implies that.
+             // Current dropdown logic forces a selection if models exist.
+             // This validation ensures a model is selected if choices are available.
+             if (modelsForConfig.length > 0) {
+                this.showMessage('error', `模型项无效或为空 (行: ${i + 1})`); return;
+             } else if (setting.model) { // Model selected but no models available for config (should not happen with UI logic)
+                this.showMessage('error', `模型项 "${setting.model}" 对配置 "${setting.config}" 无效 (行: ${i + 1})`); return;
+             }
+             // If modelsForConfig.length is 0 and setting.model is also empty, it's a valid state (config with no models).
+          }
+
+          if (!setting.weight || !this.isPositiveInt(String(setting.weight))) { this.showMessage('error', `权重必须是正整数 (行: ${i + 1})`); return; }
           if (setting.priority === null || setting.priority === undefined || !this.isNatureInt(String(setting.priority))) { this.showMessage('error', `优先级必须是非负整数 (行: ${i + 1})`); return; }
         }
-        // Format settings for storage (remove temporary id)
-        const formattedSettings = this.settings.map(({id, ...rest}) => ({
-          config: rest.config,
-          model: rest.model,
-          weigh: parseInt(rest.weight),
-          priority: parseInt(rest.priority)
+
+        const formattedSettings = this.settings.map(s => ({
+          config: s.config,
+          model: s.model,
+          weigh: parseInt(s.weight, 10), // Ensure parsing from string
+          priority: parseInt(s.priority, 10) // Ensure parsing from string
         }));
-        const config = JSON.parse(localStorage.getItem('aiGalgameConfig') || '{}');
-        if (!config.模型) config.模型 = {};
-        config.模型[`${this.activeTab}_setting`] = formattedSettings;
-        localStorage.setItem('aiGalgameConfig', JSON.stringify(config));
+
+        const configData = JSON.parse(localStorage.getItem('aiGalgameConfig') || '{}');
+        if (!configData.模型) configData.模型 = {};
+        configData.模型[`${this.activeTab}_setting`] = formattedSettings;
+        localStorage.setItem('aiGalgameConfig', JSON.stringify(configData));
         this.showMessage('success', `${this.activeTab} 设置已保存！`);
-      } catch (error) { console.error('Failed to save settings:', error); this.showMessage('error', `保存 ${this.activeTab} 设置时出错: ${error.message}`); }
+      } catch (error) {
+        console.error('Failed to save settings:', error);
+        this.showMessage('error', `保存 ${this.activeTab} 设置时出错: ${error.message}`);
+      }
     },
     validateInput(event, setting, field, validationFn) {
         const value = event.target.value;
-        if (value === '' || validationFn(value)) { setting[field] = value; event.target.classList.remove('invalid-input'); }
-        else { event.target.classList.add('invalid-input'); }
+        // Allow empty string for temporary input state, validation on save is key
+        if (value === '' || validationFn(value)) {
+            // setting[field] = value; // v-model already does this if not using .number
+            // If using v-model.number, ensure it's string for validation if needed
+            if (typeof setting[field] === 'number') setting[field] = String(value);
+            else setting[field] = value;
+
+            event.target.classList.remove('invalid-input');
+        } else {
+            event.target.classList.add('invalid-input');
+        }
     },
     validatePositiveInt(event, setting, field) { this.validateInput(event, setting, field, this.isPositiveInt); },
     validateNatureInt(event, setting, field) { this.validateInput(event, setting, field, this.isNatureInt); },
-    isPositiveInt(value) { return /^[1-9]\d*$/.test(value); },
-    isNatureInt(value) { return /^(0|[1-9]\d*)$/.test(value); },
+    isPositiveInt(value) { return /^[1-9]\d*$/.test(value) && parseInt(value,10) > 0; },
+    isNatureInt(value) { return /^(0|[1-9]\d*)$/.test(value) && parseInt(value,10) >= 0; },
 
-    // --- Prompt Management Methods (Unchanged) ---
+    // --- Prompt Management Methods (Largely Unchanged) ---
     updateIdDropdown() {
       this.saveCurrentPrompt(); const kind = this.selectedKind;
       if (!kind) { this.idOptions = []; this.selectedId = ''; this.promptContent = ''; this.promptVarContent = ''; this.currentKind = ''; this.currentId = ''; this.statusMessage = '请选择提示词类型'; return; }
       const kindData = this.kindNumberData.find(item => item.kind === kind);
-      if (kindData) { const numPrompts = kindData.number; this.idOptions = Array.from({ length: numPrompts }, (_, i) => (i + 1).toString()); if (!this.idOptions.includes(this.selectedId)) { this.selectedId = this.idOptions.length > 0 ? this.idOptions[0] : ''; } this.loadPromptContent(); }
+      if (kindData) { const numPrompts = kindData.number; this.idOptions = Array.from({ length: numPrompts }, (_, i) => (i + 1).toString()); if (!this.idOptions.includes(this.selectedId) || !this.selectedId) { this.selectedId = this.idOptions.length > 0 ? this.idOptions[0] : ''; } this.loadPromptContent(); }
       else { this.idOptions = []; this.selectedId = ''; this.promptContent = ''; this.promptVarContent = ''; this.currentKind = kind; this.currentId = ''; this.statusMessage = `未找到 "${kind}" 类型的提示词配置`; }
     },
     loadPromptContent() {
       this.saveCurrentPrompt(); const kind = this.selectedKind; const id = this.selectedId;
-      if (!kind || !id) { this.promptContent = ''; this.promptVarContent = ''; this.currentKind = ''; this.currentId = ''; this.statusMessage = '请选择提示词类型和编号'; return; }
+      if (!kind || !id) { this.promptContent = ''; this.promptVarContent = ''; /*this.currentKind = ''; this.currentId = '';*/ this.statusMessage = '请选择提示词类型和编号'; return; }
       const promptConfig = this.loadPromptSettings(); let found = false; this.promptContent = ''; this.promptVarContent = '';
       for (const kindConfig of promptConfig) { if (kindConfig.kind === kind) { for (const content of kindConfig.content) { if (content.id === id) { this.promptContent = content.prompt || ''; this.promptVarContent = content.prompt_var || ''; found = true; break; } } if (found) break; } }
-      this.currentKind = kind; this.currentId = id; this.statusMessage = `已加载: ${kind} - ${id}`;
+      this.currentKind = kind; this.currentId = id; this.statusMessage = found ? `已加载: ${kind} - ${id}` : `未找到提示词: ${kind} - ${id} (将创建新的)`;
     },
     saveCurrentPrompt() {
       const kind = this.currentKind; const id = this.currentId; const content = this.promptContent; const varContent = this.promptVarContent;
-      if (!kind || !id) { return false; } const promptConfig = this.loadPromptSettings(); let kindConfig = promptConfig.find(config => config.kind === kind);
+      if (!kind || !id) { return false; } // Only save if a prompt was loaded/selected
+      const promptConfig = this.loadPromptSettings(); let kindConfig = promptConfig.find(config => config.kind === kind);
       if (!kindConfig) { kindConfig = { kind, content: [] }; promptConfig.push(kindConfig); } let promptItem = kindConfig.content.find(item => item.id === id);
       if (!promptItem) { promptItem = { id, prompt: content, prompt_var: varContent }; kindConfig.content.push(promptItem); } else { promptItem.prompt = content; promptItem.prompt_var = varContent; }
       try { const config = JSON.parse(localStorage.getItem('aiGalgameConfig') || '{}'); if (!config.提示词) config.提示词 = []; const kindIndex = config.提示词.findIndex(item => item.kind === kind); if (kindIndex !== -1) { config.提示词[kindIndex] = kindConfig; } else { config.提示词.push(kindConfig); } localStorage.setItem('aiGalgameConfig', JSON.stringify(config)); return true; }
       catch (error) { console.error('Failed to save prompt:', error); this.showMessage('error', `保存提示词时出错: ${error.message}`); return false; }
     },
     savePromptConfig() {
-      if (this.saveCurrentPrompt()) { this.showMessage('success', '提示词配置已保存！'); this.statusMessage = '配置已保存'; }
-      else { if (!this.currentKind || !this.currentId) { this.showMessage('error', '请先选择要保存的提示词类型和编号'); this.statusMessage = '保存失败: 未选择提示词'; } }
+      if (!this.selectedKind || !this.selectedId) {
+          this.showMessage('error', '请先选择要保存的提示词类型和编号');
+          this.statusMessage = '保存失败: 未选择提示词';
+          return;
+      }
+      // Ensure currentKind and currentId are set to the selected ones before saving
+      this.currentKind = this.selectedKind;
+      this.currentId = this.selectedId;
+
+      if (this.saveCurrentPrompt()) { this.showMessage('success', '提示词配置已保存！'); this.statusMessage = `已保存: ${this.currentKind} - ${this.currentId}`; }
+      // else: saveCurrentPrompt already shows error message
     },
     loadPromptSettings() {
       try { const config = JSON.parse(localStorage.getItem('aiGalgameConfig') || '{}'); return Array.isArray(config.提示词) ? config.提示词 : []; }
@@ -523,17 +607,21 @@ export default {
       reader.readAsText(file);
     },
     processPromptImport(data) {
-      try { if (!Array.isArray(data)) { throw new Error('无效的JSON格式：根元素应为列表 []'); } for (const item of data) { if (!item || typeof item !== 'object' || !item.kind || !Array.isArray(item.content)) { throw new Error('无效的JSON格式：项目必须是包含kind和content的对象'); } for(const contentItem of item.content) { if (!contentItem || typeof contentItem !== 'object' || !contentItem.id || contentItem.prompt === undefined) { throw new Error(`无效的JSON格式："${item.kind}" 内容项目格式错误`); } if (contentItem.prompt_var === undefined) { contentItem.prompt_var = ''; } } } const config = JSON.parse(localStorage.getItem('aiGalgameConfig') || '{}'); config.提示词 = data; localStorage.setItem('aiGalgameConfig', JSON.stringify(config)); this.updateIdDropdown(); this.showMessage('success', '提示词已成功导入'); this.statusMessage = '导入成功'; }
+      try { if (!Array.isArray(data)) { throw new Error('无效的JSON格式：根元素应为列表 []'); } for (const item of data) { if (!item || typeof item !== 'object' || !item.kind || !Array.isArray(item.content)) { throw new Error('无效的JSON格式：项目必须是包含kind和content的对象'); } for(const contentItem of item.content) { if (!contentItem || typeof contentItem !== 'object' || !contentItem.id || contentItem.prompt === undefined) { throw new Error(`无效的JSON格式："${item.kind}" 内容项目格式错误`); } if (contentItem.prompt_var === undefined) { contentItem.prompt_var = ''; } } } const config = JSON.parse(localStorage.getItem('aiGalgameConfig') || '{}'); config.提示词 = data; localStorage.setItem('aiGalgameConfig', JSON.stringify(config)); this.selectedKind = ''; this.selectedId = ''; this.updateIdDropdown(); this.showMessage('success', '提示词已成功导入'); this.statusMessage = '导入成功, 请重新选择类型'; }
       catch (error) { console.error('Prompt import failed:', error); this.showMessage('error', `导入失败: ${error.message}`); this.statusMessage = '导入失败'; }
     },
     exportPromptConfig() {
-      this.saveCurrentPrompt(); const promptConfig = this.loadPromptSettings(); const dataStr = JSON.stringify(promptConfig, null, 2); const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr); const exportFileDefaultName = 'ai_galgame_prompts.json'; const linkElement = document.createElement('a'); linkElement.setAttribute('href', dataUri); linkElement.setAttribute('download', exportFileDefaultName); document.body.appendChild(linkElement); linkElement.click(); document.body.removeChild(linkElement); this.showMessage('success', '提示词已导出'); this.statusMessage = '导出成功';
+      if (this.selectedKind && this.selectedId) { this.saveCurrentPrompt(); } // Save active edits before export
+      const promptConfig = this.loadPromptSettings(); const dataStr = JSON.stringify(promptConfig, null, 2); const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr); const exportFileDefaultName = 'ai_galgame_prompts.json'; const linkElement = document.createElement('a'); linkElement.setAttribute('href', dataUri); linkElement.setAttribute('download', exportFileDefaultName); document.body.appendChild(linkElement); linkElement.click(); document.body.removeChild(linkElement); this.showMessage('success', '提示词已导出'); this.statusMessage = '导出成功';
     },
     async testPrompt() {
-      this.saveCurrentPrompt(); const kind = this.selectedKind; const id = this.selectedId;
-      if (!kind || !id) { this.showMessage('error', '请选择提示词类型和编号进行测试'); this.statusMessage = '测试失败: 未选择提示词'; return; }
+      if (!this.selectedKind || !this.selectedId) { this.showMessage('error', '请选择提示词类型和编号进行测试'); this.statusMessage = '测试失败: 未选择提示词'; return; }
+      this.currentKind = this.selectedKind; // Ensure currentKind/Id are up-to-date
+      this.currentId = this.selectedId;
+      if (this.saveCurrentPrompt()){ /* Successfully saved before test */ }
+
       this.statusMessage = '正在测试提示词...';
-      try { const [prompt1, prompt2] = await processPrompt(kind, id);
+      try { const [prompt1, prompt2] = await processPrompt(this.currentKind, this.currentId); // Use currentKind/Id
         if (prompt1 === 'error' && prompt2 === 'error') { this.showMessage('error', '提示词处理失败，请检查配置和日志'); this.statusMessage = '测试失败'; return; }
         else if (prompt1 === null && prompt2 === null) { this.showMessage('warning', '未找到对应的提示词模板，测试结果为空。'); this.testResult.prompt1 = '未找到对应的提示词变量模板'; this.testResult.prompt2 = '未找到对应的提示词模板'; this.statusMessage = '测试完成: 模板未找到'; this.showTestResultModal = true; this.activeResultTab = 'prompt1'; return; }
         this.testResult.prompt1 = prompt1 || '无提示词变量输出'; this.testResult.prompt2 = prompt2 || '无提示词输出'; this.showTestResultModal = true; this.activeResultTab = 'prompt1'; this.statusMessage = '测试完成'; }
@@ -578,7 +666,6 @@ export default {
   color: var(--text-primary);
   margin: 0;
 }
-.close-btn { /* Inherits from parent scope or define here */ }
 
 /* Modal body specific to this component */
 .modal-body {
@@ -768,7 +855,6 @@ export default {
   gap: 5px;
   flex: 1 1 200px; /* Allow items to grow and wrap */
 }
-.selector-item .input-label { /* Reuse label style */ }
 .selector-item .select { /* Reuse select style */ width: 100%; }
 
 
@@ -823,8 +909,7 @@ export default {
 }
 
 /* Test Result Modal Styles */
-/* --- MODIFICATION: Added standard modal positioning --- */
-.modal { /* Ensure modal positioning is fixed and centered */
+.modal {
   position: fixed;
   inset: 0;
   background-color: rgba(0, 0, 0, 0.6);
@@ -836,16 +921,15 @@ export default {
   overflow-y: auto;
 }
 .test-result-modal-content {
-    max-width: 900px; /* Wider modal for results */
-    /* Other modal-content styles inherited or defined in parent */
+    max-width: 900px;
 }
-.result-tabs { /* Reuse tab nav styles */
+.result-tabs {
     display: flex;
     border-bottom: 1px solid var(--border-color);
     margin-bottom: 15px;
     flex-shrink: 0;
 }
-.result-tab { /* Reuse tab item styles */
+.result-tab {
     padding: 10px 15px;
     cursor: pointer;
     border: none;
@@ -864,11 +948,10 @@ export default {
 
 .result-textarea {
   width: 100%;
-  height: 350px; /* Fixed height for result display */
-  resize: none; /* Disable resizing */
+  height: 350px;
+  resize: none;
   font-family: monospace;
   font-size: 0.9rem;
-   /* inherits .input styles */
 }
 
 /* Responsive Adjustments */
@@ -881,20 +964,20 @@ export default {
     .header-action, .setting-action { flex-basis: 10%; min-width: 50px; }
 
     .editor-container-dual {
-        flex-direction: column; /* Stack textareas */
+        flex-direction: column;
         gap: 15px;
     }
     .prompt-textarea {
         min-height: 150px;
     }
-     .modal-body { padding: 15px; } /* Add padding back for smaller screens */
+     .modal-body { padding: 15px; }
      .tab-content-area { padding: 15px; }
 }
 
 @media (max-width: 576px) {
      .tab-navigation { padding: 0 5px; }
      .tab-item { font-size: 0.9rem; padding: 8px 10px; }
-     .settings-header { display: none; /* Hide header on very small screens */ }
+     .settings-header { display: none; }
      .setting-row { flex-direction: column; align-items: stretch; gap: 8px; padding: 10px; }
      .setting-cell { padding: 0; }
      .header-config, .setting-config,
@@ -902,13 +985,13 @@ export default {
      .header-weight, .setting-weight,
      .header-priority, .setting-priority,
      .header-action, .setting-action {
-         flex-basis: auto; /* Reset flex basis */
-         min-width: 0; /* Reset min width */
-         width: 100%; /* Full width */
-         text-align: left; /* Reset text align */
+         flex-basis: auto;
+         min-width: 0;
+         width: 100%;
+         text-align: left;
      }
-      .setting-action { text-align: right; } /* Align delete button right */
-      .settings-table { max-height: none; } /* Remove max height */
+      .setting-action { text-align: right; }
+      .settings-table { max-height: none; }
 
       .prompt-selector { flex-direction: column; gap: 10px; }
       .selector-item { flex-basis: auto; }
