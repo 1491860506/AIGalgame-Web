@@ -1323,18 +1323,24 @@ class MusicGenerator {
         console.log(`开始调用 ${modelName} API生成音乐...`);
         updateStatus(`生成音乐：调用 ${modelName} API...`);
 
+
+        const timeoutDuration = 600000; 
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutDuration);
         try {
             const response = await fetch(baseUrl, {
                 method: 'POST',
                 headers: headers,
-                body: JSON.stringify(apiPayload)
+                body: JSON.stringify(apiPayload),
+                signal: controller.signal
             });
-
+            clearTimeout(timeoutId);
             let apiResponseData;
             try {
                  // Always try to parse JSON, even on error, for better error messages
                  apiResponseData = await response.json();
             } catch (e) {
+                 clearTimeout(timeoutId);
                  // Handle case where response is not JSON (e.g., plain text error)
                  const errorText = await response.text();
                  throw new Error(`API响应解析失败或非JSON格式. Status: ${response.status}. Body: ${errorText.substring(0, 200)}`);
@@ -1342,6 +1348,7 @@ class MusicGenerator {
 
 
             if (!response.ok) {
+                 clearTimeout(timeoutId);
                  const errorDetail = apiResponseData?.detail || JSON.stringify(apiResponseData);
                  throw new Error(`音乐API响应错误: ${response.status} ${response.statusText} - ${errorDetail.substring(0, 200)}`);
             }
