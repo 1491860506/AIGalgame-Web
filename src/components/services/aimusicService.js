@@ -1615,7 +1615,7 @@ class MusicGenerator {
      * @param {Function} updateStatus - Function to update status messages.
      * @returns {Promise<boolean>} True on success, False on failure.
      */
-    async generateEndMusic(storyId, updateStatus) {
+    async generateEndMusic(storyId, updateStatus=console.log) {
         console.log(`Starting ending music generation for storyId: ${storyId}...`);
         if (!storyId) {
             const errorMsg = "生成结尾音乐失败：必须提供 storyId。";
