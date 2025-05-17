@@ -1,15 +1,17 @@
 <template>
   <!-- Individual tree node -->
-  <li :class="['story-node-item', { 'has-story': node.hasStory, 'is-root': depth === 0 }]">
+  <li :class="['story-node-item', { 'has-story': node.hasStory, 'is-root': depth === 0, 'is-end-game': isEndGameNode }]" ref="storyNodeItem">
     <div class="node-content">
       <!-- Node Label -->
       <span class="node-label" @click.stop="toggleChildren">
          <font-awesome-icon v-if="node.children && node.children.length > 0"
                             :icon="['fas', showChildren ? 'chevron-down' : 'chevron-right']"
                             class="node-toggle-icon" />
-        <span :class="{ 'story-title': node.hasStory, 'no-story': !node.hasStory }">
+        <span :class="['node-text-wrapper', { 'story-title': node.hasStory, 'no-story': !node.hasStory }]" :title="node.label">
             {{ node.label }}
-             <font-awesome-icon v-if="node.hasStory" :icon="['fas', 'book']" class="story-icon" title="包含故事内容" />
+             <font-awesome-icon v-if="node.hasStory && !isEndGameNode" :icon="['fas', 'book']" class="story-icon" title="包含故事内容" />
+             <!-- Optional: Different icon or additional text for end game nodes -->
+             <span v-if="isEndGameNode" class="end-game-indicator" title="这是一个结局节点">🏁</span>
         </span>
       </span>
 
@@ -34,19 +36,15 @@
         @view="$emit('view', $event)"
         @export="$emit('export', $event)"
         @show-message="$emit('show-message', $event)"
+        @node-expanded="$emit('node-expanded', $event)"
       />
     </ul>
   </li>
 </template>
 
 <script>
-// Import Font Awesome icons if not globally registered
-// import { faChevronRight, faChevronDown, faBook, faEye, faDownload } from '@fortawesome/free-solid-svg-icons';
-// import { library } from '@fortawesome/fontawesome-svg-core';
-// library.add(faChevronRight, faChevronDown, faBook, faEye, faDownload);
-
 export default {
-  name: 'StoryNode', // Recursive component name
+  name: 'StoryNode',
   props: {
     node: {
       type: Object,
@@ -58,32 +56,35 @@ export default {
       default: 0,
     },
   },
-  // Declare emitted events
-  emits: ['view', 'export', 'show-message'],
+  emits: ['view', 'export', 'show-message', 'node-expanded'],
   data() {
     return {
       showChildren: false,
     };
   },
-   // Optionally watch depth or node changes if needed, but not strictly necessary for basic tree display
+  computed: {
+    isEndGameNode() {
+      // Keywords to identify an "end game" node. Case-insensitive.
+      const endGameKeywords = ['结束游戏', '游戏结束', '结局', 'ending', 'game over'];
+      if (this.node && this.node.label) {
+        const labelLower = this.node.label.toLowerCase();
+        return endGameKeywords.some(keyword => labelLower.includes(keyword.toLowerCase()));
+      }
+      return false;
+    }
+  },
   watch: {
     node: {
-      handler() {
-        // If the node object changes, maybe reset showChildren?
-        // Not needed for simple display, but useful if expanding/collapsing state should reset.
-        // this.showChildren = false;
-      },
-      deep: true, // Watch nested properties if needed
+      handler() {},
+      deep: true,
     },
      depth() {
-         // Maybe automatically expand the root node?
-         if (this.depth === 0) {
-             this.showChildren = true;
+         if (this.depth === 0 && !this.showChildren) {
+             // this.showChildren = true; // auto-expand is now in mounted
          }
      }
   },
    mounted() {
-     // Automatically expand the root node on mount
      if (this.depth === 0) {
          this.showChildren = true;
      }
@@ -91,23 +92,21 @@ export default {
   methods: {
     toggleChildren() {
        if (this.node.children && this.node.children.length > 0) {
+            const expanding = !this.showChildren;
             this.showChildren = !this.showChildren;
+            if (expanding) {
+              this.$nextTick(() => {
+                this.$emit('node-expanded', this.$refs.storyNodeItem); // Pass the li element itself
+              });
+            }
         }
     },
     viewNode() {
-      // Emit 'view' event with the current node data
       this.$emit('view', this.node);
     },
     exportNode() {
-      // Emit 'export' event with the current node data
       this.$emit('export', this.node);
     },
-    // If this node component ever needed to show a message itself,
-    // it would use this method to emit upwards.
-    // For now, notifications are handled by the parent (ExportStory).
-    // handleShowMessage(payload) {
-    //    this.$emit('show-message', payload);
-    // }
   },
 };
 </script>
@@ -115,115 +114,130 @@ export default {
 <style scoped>
 /* Individual Node Item */
 .story-node-item {
-  list-style: none; /* Remove default list style */
+  list-style: none;
   margin: 0;
   padding: 0;
-  /* Add indentation based on depth */
   padding-left: 20px; /* Base indentation */
   position: relative;
 }
 
-/* Connectors (Optional, complex CSS) */
-/* Could add lines connecting nodes using ::before/::after pseudos */
-/* .story-node-item:not(.is-root)::before { ... } */
-/* .story-node-item:not(:last-child)::after { ... } */
+/* Styling for End Game Nodes */
+.story-node-item.is-end-game > .node-content {
+  background-color: var(--surface-attention-subtle, rgba(250, 173, 20, 0.08)); /* Light yellow/orange, adjust var if needed */
+  border-left: 3px solid var(--border-attention, #fabd14); /* A more prominent color for the border */
+  padding-left: 5px; /* Adjust padding slightly due to border */
+  margin-left: -8px; /* Compensate for padding-left and border */
+}
+
+.story-node-item.is-end-game .node-text-wrapper {
+  color: var(--text-attention, #d48806); /* Darker, more prominent text color for endings */
+  font-weight: 600; /* Bolder text for endings */
+}
+
+.end-game-indicator {
+  margin-left: 5px;
+  font-weight: normal; /* Reset font-weight if parent is bold */
+  color: var(--text-primary); /* Or a specific color for the indicator */
+}
 
 
 .node-content {
   display: flex;
   align-items: center;
   padding: 8px 0;
-  cursor: pointer;
   border-radius: var(--border-radius-sm);
   transition: background-color 0.2s ease;
-  user-select: none; /* Prevent text selection on click */
+  user-select: none;
 }
-.node-content:hover {
+.node-content:hover:not(.is-end-game > *) { /* Don't override end-game bg on hover */
   background-color: var(--hover-overlay);
 }
+.story-node-item.is-end-game > .node-content:hover {
+  background-color: var(--surface-attention-subtle-hover, rgba(250, 173, 20, 0.15)); /* Slightly darker hover for end game nodes */
+}
+
 
 .node-label {
-  flex-grow: 1; /* Allow label to take space */
+  flex-grow: 1;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
   color: var(--text-primary);
   font-size: 0.95rem;
+  cursor: pointer;
 }
 
 .node-toggle-icon {
     color: var(--text-secondary);
     transition: transform 0.2s ease;
-    width: 1em; /* Ensure consistent icon width */
+    width: 1em;
+    flex-shrink: 0;
+    margin-top: 0.15em;
 }
-/* No rotation needed as chevron icons handle orientation */
-/* .node-toggle-icon.rotate { transform: rotate(90deg); } */
+
+.node-text-wrapper {
+  display: inline-block;
+  width: 210px; /* Target: 15 CJK chars. Adjust based on font. */
+  white-space: normal;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  line-height: 1.45;
+  text-align: left;
+}
 
 
-.story-title {
-    font-weight: 500; /* Bolder for nodes with story */
-    color: var(--primary-color); /* Primary color for story nodes */
+.story-title { /* Applied to .node-text-wrapper if node.hasStory */
+    font-weight: 500;
+    color: var(--primary-color);
 }
-.no-story {
+.no-story { /* Applied to .node-text-wrapper if !node.hasStory */
     font-style: italic;
-    color: var(--text-tertiary); /* Dimmer for nodes without story */
+    color: var(--text-tertiary);
 }
 
 .story-icon {
-    font-size: 0.9em; /* Smaller icon next to label */
+    font-size: 0.9em;
     color: var(--primary-dark);
+    margin-left: 5px;
 }
 
 
 .node-actions {
   display: flex;
   align-items: center;
-  gap: 4px; /* Smaller gap between action buttons */
-  flex-shrink: 0; /* Prevent actions from shrinking */
-  opacity: 0; /* Hide actions by default */
+  gap: 4px;
+  flex-shrink: 0;
+  opacity: 0;
   transition: opacity 0.2s ease;
+  margin-left: auto;
 }
 
-/* Show actions on hover of the whole node content */
 .node-content:hover .node-actions {
   opacity: 1;
 }
-
-.action-button {
-  /* Use global btn btn-text btn-sm */
-  padding: 4px 6px; /* Small padding for icon buttons */
-}
-.action-button .svg-inline--fa {
-    font-size: 0.8em; /* Smaller icon size */
-}
-
 
 .node-children {
   list-style: none;
   padding: 0;
   margin: 0;
-  /* Indentation is handled by the recursive .story-node-item padding-left */
 }
 
-/* Style for nodes at specific depths if needed */
-/* .story-node-item[data-depth="1"] { padding-left: 30px; } */
-
-
-/* Optional: Style for selected/active node */
-/* .story-node-item.is-selected > .node-content { background-color: var(--selected-overlay); } */
-
-
-/* Responsive adjustments (optional) */
 @media (max-width: 768px) {
    .story-node-item {
-      padding-left: 15px; /* Reduce indentation on smaller screens */
+      padding-left: 15px;
    }
    .node-label {
        font-size: 0.9rem;
    }
     .node-actions {
-        opacity: 1; /* Always show actions on touch devices / small screens */
+        opacity: 1;
+    }
+    .node-text-wrapper {
+        width: 150px; /* Adjust for smaller screens if needed */
+    }
+    .story-node-item.is-end-game > .node-content {
+        margin-left: -6px; /* Adjust for smaller padding-left */
+        padding-left: 3px;
     }
 }
-
 </style>
