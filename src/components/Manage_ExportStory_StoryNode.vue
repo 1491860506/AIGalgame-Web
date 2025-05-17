@@ -20,9 +20,6 @@
          <button v-if="node.hasStory" @click.stop="viewNode" class="btn btn-text btn-sm" title="预览故事内容">
             <font-awesome-icon :icon="['fas', 'eye']" />
          </button>
-         <button v-if="node.hasStory" @click.stop="exportNode" class="btn btn-text btn-sm" title="导出故事内容">
-            <font-awesome-icon :icon="['fas', 'download']" />
-         </button>
       </div>
     </div>
 
@@ -103,9 +100,6 @@ export default {
     },
     viewNode() {
       this.$emit('view', this.node);
-    },
-    exportNode() {
-      this.$emit('export', this.node);
     },
   },
 };
