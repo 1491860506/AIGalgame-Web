@@ -206,17 +206,13 @@ export default {
       
       // 构建选择对话框
       const selectDiv = document.createElement('div');
-      selectDiv.style.position = 'fixed';
-      selectDiv.style.top = '50%';
-      selectDiv.style.left = '50%';
-      selectDiv.style.transform = 'translate(-50%, -50%)';
-      selectDiv.style.backgroundColor = 'var(--content-bg)';
-      selectDiv.style.padding = '20px';
-      selectDiv.style.borderRadius = '8px';
-      selectDiv.style.boxShadow = 'var(--shadow)';
-      selectDiv.style.zIndex = '1000';
-      selectDiv.style.maxWidth = '400px';
-      selectDiv.style.width = '90%';
+      selectDiv.classList.add('import-dialog');
+    selectDiv.style.position = 'fixed';
+    selectDiv.style.top = '50%';
+    selectDiv.style.left = '50%';
+    selectDiv.style.transform = 'translate(-50%, -50%)';
+    selectDiv.style.zIndex = '1000';
+    selectDiv.style.width = '90%'; // Responsive width
       
       const title = document.createElement('h3');
       title.textContent = '选择要导入的配置项';
@@ -296,7 +292,9 @@ export default {
       cancelButton.style.border = 'none';
       cancelButton.style.borderRadius = '4px';
       cancelButton.style.cursor = 'pointer';
-      
+          cancelButton.onmouseenter = () => cancelButton.style.backgroundColor = 'var(--hover-overlay)';
+    cancelButton.onmouseleave = () => cancelButton.style.backgroundColor = 'transparent';
+
       const confirmButton = document.createElement('button');
       confirmButton.textContent = '确认导入';
       confirmButton.style.padding = '8px 16px';
@@ -305,7 +303,9 @@ export default {
       confirmButton.style.border = 'none';
       confirmButton.style.borderRadius = '4px';
       confirmButton.style.cursor = 'pointer';
-      
+          confirmButton.onmouseenter = () => confirmButton.style.backgroundColor = 'var(--primary-dark)';
+    confirmButton.onmouseleave = () => confirmButton.style.backgroundColor = 'var(--primary-color)';
+
       buttonContainer.appendChild(cancelButton);
       buttonContainer.appendChild(confirmButton);
       selectDiv.appendChild(buttonContainer);
@@ -1103,5 +1103,61 @@ input:checked + .switch-slider:before {
   background-color: rgba(var(--error-color-rgb, 239, 68, 68), 0.1); /* Use variable/rgba */
   color: #ef4444; /* Keep red for close button */
   transform: rotate(90deg);
+}
+
+.import-dialog {
+  position: fixed; /* Keep for clarity, JS also sets it */
+  top: 50%; /* Keep for clarity */
+  left: 50%; /* Keep for clarity */
+  transform: translate(-50%, -50%); /* Keep for clarity */
+  
+  background-color: var(--surface-color); /* MODIFIED: Use surface-color for a card-like appearance */
+  border-radius: var(--border-radius-md); /* MODIFIED: Use md radius (e.g., 8px) */
+  padding: 20px; /* MODIFIED: Adjust padding */
+  width: 90%; /* Keep for clarity, ensures responsiveness */
+  max-width: 400px; /* MODIFIED: Adjust max-width */
+  box-shadow: var(--box-shadow); /* MODIFIED: Use standard card box-shadow */
+  z-index: 1000; /* Keep for clarity */
+  color: var(--text-primary); /* Ensures text color is appropriate for the background */
+}
+
+/* Optional: If you want to control more styles of inner elements via CSS,
+   you would assign classes in JS and define them here.
+   For example, if buttons were given .btn and .btn-primary classes in JS:
+.import-dialog .btn { ... }
+.import-dialog .btn-primary { ... }
+   The JS changes above for buttons are minimal inline fixes.
+*/
+
+/* Styles for elements within .import-dialog that are created by JS */
+/* These styles are mostly already set inline by the JS, but having them in CSS can be a fallback or override if JS changes */
+.import-dialog h3 {
+  margin-top: 0;
+  color: var(--text-primary); /* Matches JS inline style */
+  margin-bottom: 15px; /* Matches JS inline style */
+}
+
+.import-dialog-item { /* This class is not explicitly added in the provided JS for item containers but would be good practice */
+  margin: 8px 0; /* Matches JS implied margin for checkbox containers */
+  display: flex;
+  align-items: center;
+}
+
+.import-dialog .checkbox-label { /* Assuming labels next to checkboxes could use this if structured so */
+    color: var(--text-primary); /* Matches JS inline style for labels */
+    margin-left: 8px; /* Corresponds to checkbox.style.marginRight */
+}
+
+.import-dialog-divider { /* Matches JS created divider styling */
+  border: none;
+  border-top: 1px solid var(--border-color);
+  margin: 10px 0;
+}
+
+.import-dialog-buttons { /* Matches JS created button container styling */
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px; /* Matches JS (was 10px in original code, 12px in CSS example) */
+  margin-top: 20px;
 }
 </style>
